@@ -58,6 +58,29 @@ async function findIssueByKey(key) {
   return json.data?.issue ?? null;
 }
 
+async function getActiveIssues() {
+  const res = await fetch("https://api.linear.app/graphql", {
+    method: "POST",
+    headers: {
+      Authorization: process.env.LINEAR_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      query: `{
+        issues(
+          filter: { state: { type: { nin: ["completed", "cancelled"] } } }
+          orderBy: updatedAt
+          first: 15
+        ) {
+          nodes { id title url priority state { name } }
+        }
+      }`,
+    }),
+  });
+  const json = await res.json();
+  return json.data?.issues?.nodes ?? [];
+}
+
 async function deleteLinearIssue(id) {
   const res = await fetch("https://api.linear.app/graphql", {
     method: "POST",
@@ -202,9 +225,29 @@ async function handleText(ctx, text) {
 bot.command("start", (ctx) => {
   const keyboard = new Keyboard().text("📚 Онбординг").resized();
   return ctx.reply(
-    "Привет! Отправь мне:\n• Текст → создам задачу в Linear\n• Форвард → разберу и создам задачу\n• Голосовое → транскрибирую и создам задачи",
+    "Привет! Отправь мне:\n• Текст → создам задачу в Linear\n• Форвард → разберу и создам задачу\n• Голосовое → транскрибирую и создам задачи\n\n/tasks — список активных задач",
     { reply_markup: keyboard }
   );
+});
+
+bot.command("tasks", async (ctx) => {
+  try {
+    await ctx.replyWithChatAction("typing");
+    const issues = await getActiveIssues();
+    if (issues.length === 0) return ctx.reply("Нет активных задач.");
+
+    const priorityMap = { 1: "🔴", 2: "🟠", 3: "🟡", 4: "🟢", 0: "⚪️" };
+    const lines = issues.map(issue =>
+      `${priorityMap[issue.priority] ?? "⚪️"} [${issue.title}](${issue.url}) — _${issue.state.name}_`
+    );
+    await ctx.reply(`*Активные задачи (${issues.length}):*\n\n` + lines.join("\n"), {
+      parse_mode: "Markdown",
+      disable_web_page_preview: true,
+    });
+  } catch (e) {
+    console.error("❌ /tasks ошибка:", e);
+    await ctx.reply("❌ Ошибка: " + e.message);
+  }
 });
 
 // ─── Debug: ловим все сообщения ───────────────────────────────────────────────
