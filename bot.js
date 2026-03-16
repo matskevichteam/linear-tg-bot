@@ -81,6 +81,21 @@ async function getActiveIssues() {
   return json.data?.issues?.nodes ?? [];
 }
 
+async function createLinearComment(issueId, body) {
+  const res = await fetch("https://api.linear.app/graphql", {
+    method: "POST",
+    headers: {
+      Authorization: process.env.LINEAR_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      query: `mutation { commentCreate(input: { issueId: "${issueId}", body: "${body.replace(/"/g, '\\"').replace(/\n/g, '\\n')}" }) { success } }`,
+    }),
+  });
+  const json = await res.json();
+  return json.data?.commentCreate?.success ?? false;
+}
+
 async function deleteLinearIssue(id) {
   const res = await fetch("https://api.linear.app/graphql", {
     method: "POST",
@@ -385,6 +400,20 @@ bot.on("message:text", async (ctx) => {
       return ctx.reply(`🗑 Удалено: ${issue.title}`);
     } else {
       return ctx.reply("❌ Не удалось удалить задачу");
+    }
+  }
+
+  // Reply на сообщение бота → комментарий в Linear
+  const replyText = ctx.message.reply_to_message?.text;
+  if (replyText) {
+    const urlMatch = replyText.match(/linear\.app\/[^\s]+\/issue\/([A-Z]+-\d+)\//);
+    if (urlMatch) {
+      const issue = await findIssueByKey(urlMatch[1]);
+      if (issue) {
+        const ok = await createLinearComment(issue.id, text);
+        if (ok) return ctx.reply(`💬 Комментарий добавлен к задаче: ${issue.title}`);
+        else return ctx.reply("❌ Не удалось добавить комментарий");
+      }
     }
   }
 
