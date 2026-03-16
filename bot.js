@@ -348,14 +348,19 @@ bot.callbackQuery("todo:delete_mode", async (ctx) => {
 
 // Назад → чистый список
 bot.callbackQuery("todo:back", async (ctx) => {
-  const issues = await getActiveIssues();
-  if (issues.length === 0) {
-    await ctx.editMessageText("✅ Все задачи выполнены!", { reply_markup: new InlineKeyboard() });
-  } else {
-    const { text, keyboard } = viewList(issues);
-    await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: keyboard });
+  try {
+    const issues = await getActiveIssues();
+    if (issues.length === 0) {
+      await ctx.editMessageText("✅ Все задачи выполнены!", { reply_markup: new InlineKeyboard() });
+    } else {
+      const { text, keyboard } = viewList(issues);
+      await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: keyboard });
+    }
+    await ctx.answerCallbackQuery();
+  } catch (e) {
+    console.error("❌ todo:back ошибка:", e);
+    await ctx.answerCallbackQuery({ text: "❌ Ошибка: " + e.message, show_alert: true });
   }
-  await ctx.answerCallbackQuery();
 });
 
 // Удалить задачу → обновить режим удаления
