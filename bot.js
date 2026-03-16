@@ -230,21 +230,26 @@ bot.command("start", (ctx) => {
   );
 });
 
+const priorityMapEmoji = { 1: "🔴", 2: "🟠", 3: "🟡", 4: "🟢", 0: "⚪️" };
+
+function buildTodoMessage(issues) {
+  const keyboard = new InlineKeyboard();
+  for (const issue of issues) {
+    const emoji = priorityMapEmoji[issue.priority] ?? "⚪️";
+    const title = issue.title.length > 35 ? issue.title.slice(0, 33) + "…" : issue.title;
+    keyboard.url(`${emoji} ${title}`, issue.url).text("🗑", `del:${issue.id}`).row();
+  }
+  keyboard.text("🔄 Обновить", "todo:refresh");
+  return { text: `📋 *Активные задачи (${issues.length}):*`, keyboard };
+}
+
 bot.command("todo", async (ctx) => {
   try {
     await ctx.replyWithChatAction("typing");
     const issues = await getActiveIssues();
     if (issues.length === 0) return ctx.reply("Нет активных задач.");
-
-    const priorityMap = { 1: "🔴", 2: "🟠", 3: "🟡", 4: "🟢", 0: "⚪️" };
-
-    for (const issue of issues) {
-      const keyboard = new InlineKeyboard().text("🗑 Удалить", `del:${issue.id}`);
-      await ctx.reply(
-        `${priorityMap[issue.priority] ?? "⚪️"} [${issue.title}](${issue.url})\n_${issue.state.name}_`,
-        { parse_mode: "Markdown", disable_web_page_preview: true, reply_markup: keyboard }
-      );
-    }
+    const { text, keyboard } = buildTodoMessage(issues);
+    await ctx.reply(text, { parse_mode: "Markdown", reply_markup: keyboard });
   } catch (e) {
     console.error("❌ /todo ошибка:", e);
     await ctx.reply("❌ Ошибка: " + e.message);
@@ -253,13 +258,27 @@ bot.command("todo", async (ctx) => {
 
 bot.callbackQuery(/^del:(.+)$/, async (ctx) => {
   const id = ctx.match[1];
-  await ctx.answerCallbackQuery();
   const ok = await deleteLinearIssue(id);
-  if (ok) {
-    await ctx.editMessageText("🗑 Удалено", { reply_markup: new InlineKeyboard() });
+  if (!ok) return ctx.answerCallbackQuery({ text: "❌ Не удалось удалить", show_alert: true });
+  const issues = await getActiveIssues();
+  if (issues.length === 0) {
+    await ctx.editMessageText("✅ Все задачи выполнены!", { reply_markup: new InlineKeyboard() });
   } else {
-    await ctx.answerCallbackQuery({ text: "❌ Не удалось удалить", show_alert: true });
+    const { text, keyboard } = buildTodoMessage(issues);
+    await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: keyboard });
   }
+  await ctx.answerCallbackQuery({ text: "🗑 Удалено" });
+});
+
+bot.callbackQuery("todo:refresh", async (ctx) => {
+  const issues = await getActiveIssues();
+  if (issues.length === 0) {
+    await ctx.editMessageText("✅ Все задачи выполнены!", { reply_markup: new InlineKeyboard() });
+  } else {
+    const { text, keyboard } = buildTodoMessage(issues);
+    await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: keyboard });
+  }
+  await ctx.answerCallbackQuery({ text: "Обновлено" });
 });
 
 // ─── Debug: ловим все сообщения ───────────────────────────────────────────────
