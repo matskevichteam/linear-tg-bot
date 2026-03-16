@@ -241,7 +241,8 @@ const HELP_TEXT = `
 📋 *Как работать с ботом:*
 
 *Создать задачу*
-Просто напиши текст — бот создаст issue в Linear
+Просто напиши текст — бот создаст issue в [Linear](https://linear.app/gconf-support/team/GCO/backlog)
+_логин: matskevichteam@gmail.com — доступ в GCONF FILES (tg)_
 
 *Приоритет*
 Пиши в начале: \`высокий\`, \`срочно\`, \`низкий\`
