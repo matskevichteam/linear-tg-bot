@@ -277,6 +277,13 @@ bot.command("help", (ctx) => {
   return ctx.reply(HELP_TEXT, { parse_mode: "Markdown" });
 });
 
+bot.command("docs", (ctx) => {
+  return ctx.reply(
+    `📁 *Документация по боту*\n\nВесь код, README и исследования Linear API лежат здесь:\n[github.com/Pupeca/linear\\-tg\\-bot](https://github.com/Pupeca/linear-tg-bot)`,
+    { parse_mode: "MarkdownV2" }
+  );
+});
+
 const priorityMapEmoji = { 1: "🔴", 2: "🟠", 3: "🟡", 4: "🟢", 0: "⚪️" };
 
 function formatIssueList(issues) {
