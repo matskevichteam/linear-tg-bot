@@ -225,12 +225,12 @@ async function handleText(ctx, text) {
 bot.command("start", (ctx) => {
   const keyboard = new Keyboard().text("📚 Онбординг").resized();
   return ctx.reply(
-    "Привет! Отправь мне:\n• Текст → создам задачу в Linear\n• Форвард → разберу и создам задачу\n• Голосовое → транскрибирую и создам задачи\n\n/tasks — список активных задач",
+    "Привет! Отправь мне:\n• Текст → создам задачу в Linear\n• Форвард → разберу и создам задачу\n• Голосовое → транскрибирую и создам задачи\n\n/todo — список активных задач",
     { reply_markup: keyboard }
   );
 });
 
-bot.command("tasks", async (ctx) => {
+bot.command("todo", async (ctx) => {
   try {
     await ctx.replyWithChatAction("typing");
     const issues = await getActiveIssues();
