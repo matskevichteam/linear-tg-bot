@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { Bot, Keyboard } from "grammy";
+import { Bot, Keyboard, InlineKeyboard } from "grammy";
 import Groq from "groq-sdk";
 
 const bot = new Bot(process.env.TELEGRAM_BOT_TOKEN);
@@ -237,16 +237,28 @@ bot.command("todo", async (ctx) => {
     if (issues.length === 0) return ctx.reply("Нет активных задач.");
 
     const priorityMap = { 1: "🔴", 2: "🟠", 3: "🟡", 4: "🟢", 0: "⚪️" };
-    const lines = issues.map(issue =>
-      `${priorityMap[issue.priority] ?? "⚪️"} [${issue.title}](${issue.url}) — _${issue.state.name}_`
-    );
-    await ctx.reply(`*Активные задачи (${issues.length}):*\n\n` + lines.join("\n"), {
-      parse_mode: "Markdown",
-      disable_web_page_preview: true,
-    });
+
+    for (const issue of issues) {
+      const keyboard = new InlineKeyboard().text("🗑 Удалить", `del:${issue.id}`);
+      await ctx.reply(
+        `${priorityMap[issue.priority] ?? "⚪️"} [${issue.title}](${issue.url})\n_${issue.state.name}_`,
+        { parse_mode: "Markdown", disable_web_page_preview: true, reply_markup: keyboard }
+      );
+    }
   } catch (e) {
-    console.error("❌ /tasks ошибка:", e);
+    console.error("❌ /todo ошибка:", e);
     await ctx.reply("❌ Ошибка: " + e.message);
+  }
+});
+
+bot.callbackQuery(/^del:(.+)$/, async (ctx) => {
+  const id = ctx.match[1];
+  await ctx.answerCallbackQuery();
+  const ok = await deleteLinearIssue(id);
+  if (ok) {
+    await ctx.editMessageText("🗑 Удалено", { reply_markup: new InlineKeyboard() });
+  } else {
+    await ctx.answerCallbackQuery({ text: "❌ Не удалось удалить", show_alert: true });
   }
 });
 
