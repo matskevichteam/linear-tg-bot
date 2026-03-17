@@ -282,6 +282,19 @@ bot.command("docs", (ctx) => {
   );
 });
 
+bot.command("onboarding", (ctx) => {
+  return ctx.reply(
+    `📚 *Онбординг саппорта*\n\n` +
+    `Добро пожаловать в команду! Здесь будут все нужные материалы:\n\n` +
+    `• Как работать с задачами в Linear\n` +
+    `• Правила коммуникации с клиентами\n` +
+    `• Частые вопросы и ответы\n` +
+    `• Полезные ссылки и контакты\n\n` +
+    `_— материалы скоро появятся здесь —_`,
+    { parse_mode: "Markdown" }
+  );
+});
+
 // ─── /todo → выбор команды → список ─────────────────────────────────────────
 
 bot.command("todo", async (ctx) => {
@@ -533,6 +546,16 @@ bot.on("message:voice", async (ctx) => {
     await ctx.reply("❌ Ошибка: " + e.message);
   }
 });
+
+// ─── Регистрация меню команд ─────────────────────────────────────────────────
+
+bot.api.setMyCommands([
+  { command: "todo", description: "📋 Список активных задач" },
+  { command: "help", description: "❓ Справка по командам" },
+  { command: "docs", description: "📁 Документация" },
+  { command: "onboarding", description: "📚 Онбординг саппорта" },
+  { command: "start", description: "🏠 Главное меню" },
+]);
 
 bot.start();
 console.log("🤖 Бот запущен");
