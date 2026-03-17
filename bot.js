@@ -5,113 +5,80 @@ import Groq from "groq-sdk";
 const bot = new Bot(process.env.TELEGRAM_BOT_TOKEN);
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// Запоминаем последнюю задачу для каждого чата
-const lastIssue = new Map(); // chatId → { id, title, url }
+// ─── Команды Linear ─────────────────────────────────────────────────────────
 
-// ─── Linear ──────────────────────────────────────────────────────────────────
+const TEAMS = {
+  support: {
+    id: process.env.LINEAR_TEAM_ID,
+    name: "Support",
+    emoji: "📋",
+  },
+  docops: {
+    id: process.env.DOCOPS_TEAM_ID,
+    name: "DocOps",
+    emoji: "📁",
+  },
+};
 
-async function createLinearIssue({ title, description, priority, label }) {
-  const priorityMap = { urgent: 1, high: 2, medium: 3, low: 4 };
+// Ожидающие задачи (ждут выбор команды)
+const pendingTask = new Map(); // chatId → { task, text }
+const lastIssue = new Map();   // chatId → { id, title, url }
 
+// ─── Linear API ─────────────────────────────────────────────────────────────
+
+async function linearGQL(query, variables) {
   const res = await fetch("https://api.linear.app/graphql", {
     method: "POST",
     headers: {
       Authorization: process.env.LINEAR_API_KEY,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      query: `
-        mutation CreateIssue($input: IssueCreateInput!) {
-          issueCreate(input: $input) {
-            success
-            issue { id title url }
-          }
-        }
-      `,
-      variables: {
-        input: {
-          title,
-          description,
-          priority: priorityMap[priority] ?? 3,
-          teamId: process.env.LINEAR_TEAM_ID,
-        },
-      },
-    }),
+    body: JSON.stringify({ query, variables }),
   });
+  return res.json();
+}
 
-  const json = await res.json();
+async function createLinearIssue({ title, description, priority, label, teamId }) {
+  const priorityMap = { urgent: 1, high: 2, medium: 3, low: 4 };
+  const json = await linearGQL(
+    `mutation CreateIssue($input: IssueCreateInput!) {
+      issueCreate(input: $input) { success issue { id title url } }
+    }`,
+    { input: { title, description, priority: priorityMap[priority] ?? 3, teamId } }
+  );
   return json.data?.issueCreate?.issue ?? null;
 }
 
 async function findIssueByKey(key) {
-  const res = await fetch("https://api.linear.app/graphql", {
-    method: "POST",
-    headers: {
-      Authorization: process.env.LINEAR_API_KEY,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      query: `{ issue(id: "${key}") { id title url } }`,
-    }),
-  });
-  const json = await res.json();
+  const json = await linearGQL(`{ issue(id: "${key}") { id title url } }`);
   return json.data?.issue ?? null;
 }
 
-async function getActiveIssues() {
-  const res = await fetch("https://api.linear.app/graphql", {
-    method: "POST",
-    headers: {
-      Authorization: process.env.LINEAR_API_KEY,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      query: `{
-        issues(
-          filter: { state: { type: { nin: ["completed", "cancelled"] } } }
-          orderBy: updatedAt
-          first: 15
-        ) {
-          nodes { id title url priority state { name } }
-        }
-      }`,
-    }),
-  });
-  const json = await res.json();
+async function getActiveIssues(teamId) {
+  const filter = teamId
+    ? `{ state: { type: { nin: ["completed", "cancelled"] } }, team: { id: { eq: "${teamId}" } } }`
+    : `{ state: { type: { nin: ["completed", "cancelled"] } } }`;
+  const json = await linearGQL(`{
+    issues(filter: ${filter}, orderBy: updatedAt, first: 30) {
+      nodes { id title url priority state { name } team { name } }
+    }
+  }`);
   return json.data?.issues?.nodes ?? [];
 }
 
 async function createLinearComment(issueId, body) {
-  const res = await fetch("https://api.linear.app/graphql", {
-    method: "POST",
-    headers: {
-      Authorization: process.env.LINEAR_API_KEY,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      query: `mutation { commentCreate(input: { issueId: "${issueId}", body: "${body.replace(/"/g, '\\"').replace(/\n/g, '\\n')}" }) { success } }`,
-    }),
-  });
-  const json = await res.json();
+  const json = await linearGQL(
+    `mutation { commentCreate(input: { issueId: "${issueId}", body: "${body.replace(/"/g, '\\"').replace(/\n/g, '\\n')}" }) { success } }`
+  );
   return json.data?.commentCreate?.success ?? false;
 }
 
 async function deleteLinearIssue(id) {
-  const res = await fetch("https://api.linear.app/graphql", {
-    method: "POST",
-    headers: {
-      Authorization: process.env.LINEAR_API_KEY,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      query: `mutation { issueDelete(id: "${id}") { success } }`,
-    }),
-  });
-  const json = await res.json();
+  const json = await linearGQL(`mutation { issueDelete(id: "${id}") { success } }`);
   return json.data?.issueDelete?.success ?? false;
 }
 
-// ─── Groq: скачать файл из Telegram ─────────────────────────────────────────
+// ─── Groq ───────────────────────────────────────────────────────────────────
 
 async function downloadTelegramFile(fileId) {
   const res = await fetch(
@@ -126,8 +93,6 @@ async function downloadTelegramFile(fileId) {
   return Buffer.from(buffer);
 }
 
-// ─── Groq: транскрипция (Whisper) ────────────────────────────────────────────
-
 async function transcribeVoice(fileBuffer) {
   const file = new File([fileBuffer], "voice.ogg", { type: "audio/ogg" });
   const transcription = await groq.audio.transcriptions.create({
@@ -137,8 +102,6 @@ async function transcribeVoice(fileBuffer) {
   });
   return transcription.text;
 }
-
-// ─── Groq: извлечь задачи из текста (LLaMA) ──────────────────────────────────
 
 async function extractTasks(text) {
   const chat = await groq.chat.completions.create({
@@ -165,7 +128,7 @@ async function extractTasks(text) {
   }
 }
 
-// ─── Парсинг задачи по ключевым словам (для текста) ─────────────────────────
+// ─── Парсинг ────────────────────────────────────────────────────────────────
 
 function parseTask(text) {
   const t = text.toLowerCase();
@@ -207,16 +170,25 @@ function parseTask(text) {
   return { title, description: text, priority, label };
 }
 
-// ─── Форматирование ───────────────────────────────────────────────────────────
+// ─── Форматирование ─────────────────────────────────────────────────────────
 
-const priorityEmoji  = { urgent: "🔴", high: "🟠", medium: "🟡", low: "🟢" };
-const priorityLabel  = { urgent: "Срочно", high: "Высокий", medium: "Средний", low: "Низкий" };
+const priorityEmoji = { urgent: "🔴", high: "🟠", medium: "🟡", low: "🟢" };
+const priorityLabel = { urgent: "Срочно", high: "Высокий", medium: "Средний", low: "Низкий" };
+const priorityMapEmoji = { 1: "🔴", 2: "🟠", 3: "🟡", 4: "🟢", 0: "⚪️" };
 
-function formatReply(task, issue) {
-  return `✅ Задача создана в Linear\n\n📋 ${issue.title}\n${priorityEmoji[task.priority]} ${priorityLabel[task.priority]} · #${task.label}\n🔗 ${issue.url}`;
+function formatReply(task, issue, teamName) {
+  return `✅ Задача создана в Linear → ${teamName}\n\n📋 ${issue.title}\n${priorityEmoji[task.priority]} ${priorityLabel[task.priority]} · #${task.label}\n🔗 ${issue.url}`;
 }
 
-// ─── Обработка текстового сообщения ──────────────────────────────────────────
+// ─── Выбор команды (inline кнопки) ──────────────────────────────────────────
+
+function teamSelectKeyboard(prefix) {
+  return new InlineKeyboard()
+    .text(`${TEAMS.support.emoji} Support`, `${prefix}:support`)
+    .text(`${TEAMS.docops.emoji} DocOps`, `${prefix}:docops`);
+}
+
+// ─── Обработка текста → задача → спросить команду ───────────────────────────
 
 async function handleText(ctx, text) {
   try {
@@ -224,24 +196,50 @@ async function handleText(ctx, text) {
     console.log("📨 Получил:", text);
     const task = parseTask(text);
     console.log("🧠 Распарсил:", task);
-    const issue = await createLinearIssue(task);
-    console.log("📋 Linear ответил:", issue);
-    if (!issue) return ctx.reply("❌ Не удалось создать задачу в Linear");
-    lastIssue.set(ctx.chat.id, issue);
-    await ctx.reply(formatReply(task, issue));
+
+    // Сохраняем задачу, спрашиваем команду
+    pendingTask.set(ctx.chat.id, { task });
+
+    const pe = priorityEmoji[task.priority];
+    const pl = priorityLabel[task.priority];
+    await ctx.reply(
+      `📝 *${task.title}*\n${pe} ${pl} · #${task.label}\n\nКуда отправить?`,
+      { parse_mode: "Markdown", reply_markup: teamSelectKeyboard("send") }
+    );
   } catch (e) {
     console.error("❌ Ошибка:", e);
     await ctx.reply("❌ Ошибка: " + e.message);
   }
 }
 
-// ─── Старт ────────────────────────────────────────────────────────────────────
+// Выбрал команду → создаём задачу
+bot.callbackQuery(/^send:(support|docops)$/, async (ctx) => {
+  const teamKey = ctx.match[1];
+  const team = TEAMS[teamKey];
+  const pending = pendingTask.get(ctx.chat.id);
+  if (!pending) return ctx.answerCallbackQuery({ text: "Задача не найдена", show_alert: true });
+
+  pendingTask.delete(ctx.chat.id);
+
+  const issue = await createLinearIssue({ ...pending.task, teamId: team.id });
+  if (!issue) {
+    await ctx.editMessageText("❌ Не удалось создать задачу в Linear");
+    return ctx.answerCallbackQuery();
+  }
+
+  lastIssue.set(ctx.chat.id, issue);
+  await ctx.editMessageText(formatReply(pending.task, issue, team.name));
+  await ctx.answerCallbackQuery({ text: `✅ → ${team.name}` });
+});
+
+// ─── Старт, Help, Docs ─────────────────────────────────────────────────────
 
 const HELP_TEXT = `
 📋 *Как работать с ботом:*
 
 *Создать задачу*
-Просто напиши текст — бот создаст issue в [Linear](https://linear.app/gconf-support/team/GCO/backlog)
+Просто напиши текст — выберешь команду (Support / DocOps)
+🔗 [Linear Backlog](https://linear.app/gconf-support/team/GCO/backlog)
 _логин: matskevichteam@gmail.com — доступ в GCONF FILES (tg)_
 
 *Приоритет*
@@ -261,8 +259,9 @@ _логин: matskevichteam@gmail.com — доступ в GCONF FILES (tg)_
 Ответь (reply) на сообщение бота и напиши \`удалить\`
 
 *Команды*
-/todo — список активных задач с кнопкой удаления
+/todo — список активных задач
 /help — это сообщение
+/docs — документация
 `.trim();
 
 bot.command("start", (ctx) => {
@@ -284,7 +283,16 @@ bot.command("docs", (ctx) => {
   );
 });
 
-const priorityMapEmoji = { 1: "🔴", 2: "🟠", 3: "🟡", 4: "🟢", 0: "⚪️" };
+// ─── /todo → выбор команды → список ─────────────────────────────────────────
+
+bot.command("todo", async (ctx) => {
+  const keyboard = new InlineKeyboard()
+    .text(`${TEAMS.support.emoji} Support`, "todo_team:support")
+    .text(`${TEAMS.docops.emoji} DocOps`, "todo_team:docops")
+    .row()
+    .text("📋 Все задачи", "todo_team:all");
+  await ctx.reply("Какую команду показать?", { reply_markup: keyboard });
+});
 
 function formatIssueList(issues) {
   return issues
@@ -293,107 +301,133 @@ function formatIssueList(issues) {
 }
 
 // Состояние 1: чистый список
-function viewList(issues) {
-  const text = `📋 *Активные задачи (${issues.length}):*\n\n${formatIssueList(issues)}`;
-  const keyboard = new InlineKeyboard().text("🔄 Обновить", "todo:refresh");
+function viewList(issues, teamLabel) {
+  const text = `${teamLabel} — *Активные задачи (${issues.length}):*\n\n${formatIssueList(issues)}`;
+  const keyboard = new InlineKeyboard().text("🔄 Обновить", `todo:refresh:${teamLabel}`);
   return { text, keyboard };
 }
 
 // Состояние 2: подтверждение удаления
-function viewConfirm(issues) {
-  const text = `📋 *Активные задачи (${issues.length}):*\n\n${formatIssueList(issues)}\n\n_Хочешь удалить задачу?_`;
+function viewConfirm(issues, teamLabel) {
+  const text = `${teamLabel} — *Активные задачи (${issues.length}):*\n\n${formatIssueList(issues)}\n\n_Хочешь удалить задачу?_`;
   const keyboard = new InlineKeyboard()
-    .text("🗑 Удалить", "todo:delete_mode")
-    .text("⬅️ Назад", "todo:back");
+    .text("🗑 Удалить", `todo:delete_mode:${teamLabel}`)
+    .text("⬅️ Назад", `todo:back:${teamLabel}`);
   return { text, keyboard };
 }
 
 // Состояние 3: список с кнопками удаления
-function viewDeleteMode(issues) {
-  const text = `📋 *Выбери задачу для удаления:*`;
+function viewDeleteMode(issues, teamLabel) {
+  const text = `${teamLabel} — *Выбери задачу для удаления:*`;
   const keyboard = new InlineKeyboard();
   for (const issue of issues) {
     const emoji = priorityMapEmoji[issue.priority] ?? "⚪️";
     const title = issue.title.length > 32 ? issue.title.slice(0, 30) + "…" : issue.title;
-    keyboard.url(`${emoji} ${title}`, issue.url).text("🗑", `del:${issue.id}`).row();
+    keyboard.url(`${emoji} ${title}`, issue.url).text("🗑", `del:${issue.id}:${teamLabel}`).row();
   }
-  keyboard.text("⬅️ Назад", "todo:back");
+  keyboard.text("⬅️ Назад", `todo:back:${teamLabel}`);
   return { text, keyboard };
 }
 
-bot.command("todo", async (ctx) => {
-  try {
-    await ctx.replyWithChatAction("typing");
-    const issues = await getActiveIssues();
-    if (issues.length === 0) return ctx.reply("Нет активных задач.");
-    const { text, keyboard } = viewList(issues);
-    await ctx.reply(text, { parse_mode: "Markdown", reply_markup: keyboard });
-  } catch (e) {
-    console.error("❌ /todo ошибка:", e);
-    await ctx.reply("❌ Ошибка: " + e.message);
+function resolveTeamId(teamLabel) {
+  if (teamLabel === "📋 Все задачи") return null;
+  for (const t of Object.values(TEAMS)) {
+    if (`${t.emoji} ${t.name}` === teamLabel) return t.id;
   }
+  return null;
+}
+
+// Выбрал команду для просмотра
+bot.callbackQuery(/^todo_team:(support|docops|all)$/, async (ctx) => {
+  const key = ctx.match[1];
+  let teamId = null;
+  let teamLabel = "📋 Все задачи";
+  if (key !== "all") {
+    const team = TEAMS[key];
+    teamId = team.id;
+    teamLabel = `${team.emoji} ${team.name}`;
+  }
+
+  const issues = await getActiveIssues(teamId);
+  if (issues.length === 0) {
+    await ctx.editMessageText(`${teamLabel} — нет активных задач.`);
+    return ctx.answerCallbackQuery();
+  }
+  const { text, keyboard } = viewList(issues, teamLabel);
+  await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: keyboard });
+  await ctx.answerCallbackQuery();
 });
 
 // Обновить → показать confirm
-bot.callbackQuery("todo:refresh", async (ctx) => {
-  const issues = await getActiveIssues();
+bot.callbackQuery(/^todo:refresh:(.+)$/, async (ctx) => {
+  const teamLabel = ctx.match[1];
+  const teamId = resolveTeamId(teamLabel);
+  const issues = await getActiveIssues(teamId);
   if (issues.length === 0) {
-    await ctx.editMessageText("✅ Все задачи выполнены!", { reply_markup: new InlineKeyboard() });
+    await ctx.editMessageText(`${teamLabel} — ✅ Все задачи выполнены!`, { reply_markup: new InlineKeyboard() });
   } else {
-    const { text, keyboard } = viewConfirm(issues);
+    const { text, keyboard } = viewConfirm(issues, teamLabel);
     await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: keyboard });
   }
   await ctx.answerCallbackQuery();
 });
 
 // Да, удалить → режим удаления
-bot.callbackQuery("todo:delete_mode", async (ctx) => {
-  const issues = await getActiveIssues();
-  const { text, keyboard } = viewDeleteMode(issues);
+bot.callbackQuery(/^todo:delete_mode:(.+)$/, async (ctx) => {
+  const teamLabel = ctx.match[1];
+  const teamId = resolveTeamId(teamLabel);
+  const issues = await getActiveIssues(teamId);
+  const { text, keyboard } = viewDeleteMode(issues, teamLabel);
   await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: keyboard });
   await ctx.answerCallbackQuery();
 });
 
 // Назад → чистый список
-bot.callbackQuery("todo:back", async (ctx) => {
+bot.callbackQuery(/^todo:back:(.+)$/, async (ctx) => {
   try {
-    const issues = await getActiveIssues();
+    const teamLabel = ctx.match[1];
+    const teamId = resolveTeamId(teamLabel);
+    const issues = await getActiveIssues(teamId);
     if (issues.length === 0) {
-      await ctx.editMessageText("✅ Все задачи выполнены!", { reply_markup: new InlineKeyboard() });
+      await ctx.editMessageText(`${teamLabel} — ✅ Все задачи выполнены!`, { reply_markup: new InlineKeyboard() });
     } else {
-      const { text, keyboard } = viewList(issues);
+      const { text, keyboard } = viewList(issues, teamLabel);
       await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: keyboard });
     }
     await ctx.answerCallbackQuery();
   } catch (e) {
     console.error("❌ todo:back ошибка:", e);
-    await ctx.answerCallbackQuery({ text: "❌ Ошибка: " + e.message, show_alert: true });
+    await ctx.answerCallbackQuery({ text: "❌ Ошибка", show_alert: true });
   }
 });
 
 // Удалить задачу → обновить режим удаления
-bot.callbackQuery(/^del:(.+)$/, async (ctx) => {
+bot.callbackQuery(/^del:([^:]+):(.+)$/, async (ctx) => {
   const id = ctx.match[1];
+  const teamLabel = ctx.match[2];
+  const teamId = resolveTeamId(teamLabel);
+
   const ok = await deleteLinearIssue(id);
   if (!ok) return ctx.answerCallbackQuery({ text: "❌ Не удалось удалить", show_alert: true });
-  const issues = await getActiveIssues();
+
+  const issues = await getActiveIssues(teamId);
   if (issues.length === 0) {
-    await ctx.editMessageText("✅ Все задачи выполнены!", { reply_markup: new InlineKeyboard() });
+    await ctx.editMessageText(`${teamLabel} — ✅ Все задачи выполнены!`, { reply_markup: new InlineKeyboard() });
   } else {
-    const { text, keyboard } = viewDeleteMode(issues);
+    const { text, keyboard } = viewDeleteMode(issues, teamLabel);
     await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: keyboard });
   }
   await ctx.answerCallbackQuery({ text: "🗑 Удалено" });
 });
 
-// ─── Debug: ловим все сообщения ───────────────────────────────────────────────
+// ─── Debug ──────────────────────────────────────────────────────────────────
 
 bot.on("message", async (ctx, next) => {
-  console.log("📩 Любое сообщение:", JSON.stringify(ctx.message, null, 2));
+  console.log("📩", JSON.stringify(ctx.message, null, 2));
   await next();
 });
 
-// ─── Текст ────────────────────────────────────────────────────────────────────
+// ─── Текст ──────────────────────────────────────────────────────────────────
 
 bot.on("message:text", async (ctx) => {
   const text = ctx.message.text.trim();
@@ -429,7 +463,7 @@ bot.on("message:text", async (ctx) => {
 
     const replyText = ctx.message.reply_to_message?.text;
     if (replyText) {
-      const urlMatch = replyText.match(/linear\.app\/[^\s]+\/issue\/([A-Z]+-\d+)\//);
+      const urlMatch = replyText.match(/linear\.app\/[^\s]+\/issue\/([A-Z\d]+-\d+)\//);
       if (urlMatch) {
         issue = await findIssueByKey(urlMatch[1]);
       }
@@ -450,7 +484,7 @@ bot.on("message:text", async (ctx) => {
   // Reply на сообщение бота → комментарий в Linear
   const replyText = ctx.message.reply_to_message?.text;
   if (replyText) {
-    const urlMatch = replyText.match(/linear\.app\/[^\s]+\/issue\/([A-Z]+-\d+)\//);
+    const urlMatch = replyText.match(/linear\.app\/[^\s]+\/issue\/([A-Z\d]+-\d+)\//);
     if (urlMatch) {
       const issue = await findIssueByKey(urlMatch[1]);
       if (issue) {
@@ -464,7 +498,7 @@ bot.on("message:text", async (ctx) => {
   await handleText(ctx, text);
 });
 
-// ─── Форвард ──────────────────────────────────────────────────────────────────
+// ─── Форвард ────────────────────────────────────────────────────────────────
 
 bot.on("message:forward_origin", async (ctx) => {
   const text = ctx.message.text || ctx.message.caption;
@@ -472,7 +506,7 @@ bot.on("message:forward_origin", async (ctx) => {
   await handleText(ctx, `[Переслано] ${text}`);
 });
 
-// ─── Голосовое ────────────────────────────────────────────────────────────────
+// ─── Голосовое ──────────────────────────────────────────────────────────────
 
 bot.on("message:voice", async (ctx) => {
   try {
@@ -484,34 +518,17 @@ bot.on("message:voice", async (ctx) => {
     console.log("🎤 Транскрипция:", transcript);
 
     await ctx.reply(`🎤 _${transcript}_`, { parse_mode: "Markdown" });
-    await ctx.replyWithChatAction("typing");
 
-    const tasks = await extractTasks(transcript);
-    console.log("🧠 Задачи из голосового:", tasks);
+    // Парсим и спрашиваем команду
+    const task = parseTask(transcript);
+    pendingTask.set(ctx.chat.id, { task });
 
-    const created = [];
-    for (const t of tasks) {
-      const issue = await createLinearIssue({
-        title: t.title,
-        description: transcript,
-        priority: t.priority,
-        label: "операционка",
-      });
-      if (issue) {
-        lastIssue.set(ctx.chat.id, issue);
-        created.push({ task: t, issue });
-      }
-    }
-
-    if (created.length === 0) return ctx.reply("❌ Не удалось создать задачи");
-
-    const reply = created
-      .map(({ task, issue }) =>
-        `✅ ${issue.title}\n${priorityEmoji[task.priority]} ${priorityLabel[task.priority]}\n🔗 ${issue.url}`
-      )
-      .join("\n\n");
-
-    await ctx.reply(reply);
+    const pe = priorityEmoji[task.priority];
+    const pl = priorityLabel[task.priority];
+    await ctx.reply(
+      `📝 *${task.title}*\n${pe} ${pl} · #${task.label}\n\nКуда отправить?`,
+      { parse_mode: "Markdown", reply_markup: teamSelectKeyboard("send") }
+    );
   } catch (e) {
     console.error("❌ Голосовое — ошибка:", e);
     await ctx.reply("❌ Ошибка: " + e.message);
