@@ -278,8 +278,7 @@ bot.command("help", (ctx) => {
 
 bot.command("docs", (ctx) => {
   return ctx.reply(
-    `📁 *Документация по боту*\n\nВесь код, README и исследования Linear API лежат здесь:\n[github.com/Pupeca/linear\\-tg\\-bot](https://github.com/Pupeca/linear-tg-bot)`,
-    { parse_mode: "MarkdownV2" }
+    `📁 Документация по боту\n\nВесь код, README и исследования Linear API лежат здесь:\nhttps://github.com/Pupeca/linear-tg-bot`
   );
 });
 
