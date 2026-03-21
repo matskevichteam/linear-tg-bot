@@ -714,11 +714,11 @@ bot.on("message:voice", async (ctx) => {
 // ─── Регистрация меню команд ─────────────────────────────────────────────────
 
 bot.api.setMyCommands([
+  { command: "start", description: "🫧 Старт" },
   { command: "onboarding", description: "🛸 Онбординг" },
   { command: "todo", description: "⚡️ Задачи" },
   { command: "help", description: "💡 Справка" },
   { command: "docs", description: "🔗 Документация" },
-  { command: "start", description: "🫧 Старт" },
 ]);
 
 bot.start();
