@@ -277,7 +277,7 @@ bot.command("help", (ctx) => {
 
 bot.command("docs", (ctx) => {
   return ctx.reply(
-    `📁 Документация по боту\n\nВесь код, README и исследования Linear API лежат здесь:\nhttps://github.com/Pupeca/linear-tg-bot`
+    `📁 Документация по боту\n\nКод, README и документация:\nhttps://github.com/matskevichteam/linear-tg-bot`
   );
 });
 
@@ -714,11 +714,11 @@ bot.on("message:voice", async (ctx) => {
 // ─── Регистрация меню команд ─────────────────────────────────────────────────
 
 bot.api.setMyCommands([
-  { command: "todo", description: "📋 Список активных задач" },
-  { command: "help", description: "❓ Справка по командам" },
-  { command: "docs", description: "📁 Документация" },
-  { command: "onboarding", description: "📚 Онбординг саппорта" },
-  { command: "start", description: "🏠 Главное меню" },
+  { command: "onboarding", description: "🛸 Онбординг" },
+  { command: "todo", description: "⚡️ Задачи" },
+  { command: "help", description: "💡 Справка" },
+  { command: "docs", description: "🔗 Документация" },
+  { command: "start", description: "🫧 Старт" },
 ]);
 
 bot.start();
