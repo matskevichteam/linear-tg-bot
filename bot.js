@@ -439,10 +439,15 @@ const ONB = {
   },
   "p3:kb": {
     text:
-      `🧠 *как обновлять knowledge base*\n\n` +
-      `в Cursor / Claude Code запусти скилл:\n` +
-      `/update-support-kb\n\n` +
-      `сырые чаты → 10-support/data/raw/ или grand-verbatim`,
+      `🔬 *knowledge base*\n\n` +
+      `в саппорте 2 системы, которые стоит поддерживать:\n\n` +
+      `1. *knowledge base* — FAQ, grand verbatim, SOP\n` +
+      `обновляется через скилл в Cursor:\n` +
+      `/update-support-kb\n` +
+      `сырые чаты → 10-support/data/raw/\n\n` +
+      `2. *этот бот* — онбординг, задачи, справка\n` +
+      `документация по нему → /docs\n\n` +
+      `эти штуки помогают не терять знания и масштабироваться 💙`,
     kb: () => new InlineKeyboard().text("⬅️", "onb:part3"),
   },
 };
