@@ -46,6 +46,7 @@ async function createLinearIssue({ title, description, priority, label, teamId }
     }`,
     { input: { title, description, priority: priorityMap[priority] ?? 3, teamId } }
   );
+  if (json.errors) console.error("❌ Linear API error:", JSON.stringify(json.errors));
   return json.data?.issueCreate?.issue ?? null;
 }
 
@@ -265,10 +266,8 @@ _логин: matskevichteam@gmail.com — доступ в GCONF FILES (tg)_
 `.trim();
 
 bot.command("start", (ctx) => {
-  const keyboard = new Keyboard().text("📚 Онбординг").resized();
   return ctx.reply(
-    "Привет! Отправь мне:\n• Текст → создам задачу в Linear\n• Форвард → разберу и создам задачу\n• Голосовое → транскрибирую и создам задачи\n\n/todo — список активных задач\n/help — все команды\n/docs — документация по боту",
-    { reply_markup: keyboard }
+    "Привет! Отправь мне:\n• Текст → создам задачу в Linear\n• Форвард → разберу и создам задачу\n• Голосовое → транскрибирую и создам задачи\n\nВсё остальное — в меню ☰ слева"
   );
 });
 
