@@ -420,8 +420,8 @@ const ONB = {
   "p3:access": {
     text:
       `🔑 *доступы и админка*\n\n` +
-      `админка:\n` +
-      `https://admin-ui-production-f2ff.up.railway.app/\n\n` +
+      `\`https://admin-ui-production-f2ff.up.railway.app/login\`\n\n` +
+      `логин и пароль → GCONF FILES (tg)\n\n` +
       `• *payments* — инвойсы\n` +
       `• *promocodes* — промокоды\n` +
       `• *user journey* — проверка юзера по тг`,
