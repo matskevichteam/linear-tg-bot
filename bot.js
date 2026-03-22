@@ -232,10 +232,21 @@ async function handleText(ctx, text) {
   }
 }
 
+// Восстановить задачу из текста сообщения (после перезапуска бота)
+function recoverPending(ctx) {
+  const msgText = ctx.callbackQuery?.message?.text || "";
+  const match = msgText.match(/📝 (.+)\n/);
+  if (!match) return null;
+  const title = match[1].trim();
+  const task = { title, description: title, priority: "medium", label: "операционка" };
+  pendingTask.set(ctx.chat.id, { task });
+  return { task };
+}
+
 // Сменить приоритет кнопкой
 bot.callbackQuery(/^prio:(high|medium|low)$/, async (ctx) => {
   const newPriority = ctx.match[1];
-  const pending = pendingTask.get(ctx.chat.id);
+  const pending = pendingTask.get(ctx.chat.id) || recoverPending(ctx);
   if (!pending) return ctx.answerCallbackQuery({ text: "Задача не найдена", show_alert: true });
 
   pending.task.priority = newPriority;
@@ -254,7 +265,7 @@ bot.callbackQuery(/^prio:(high|medium|low)$/, async (ctx) => {
 bot.callbackQuery(/^send:(support|docops)$/, async (ctx) => {
   const teamKey = ctx.match[1];
   const team = TEAMS[teamKey];
-  const pending = pendingTask.get(ctx.chat.id);
+  const pending = pendingTask.get(ctx.chat.id) || recoverPending(ctx);
   if (!pending) return ctx.answerCallbackQuery({ text: "Задача не найдена", show_alert: true });
 
   pendingTask.delete(ctx.chat.id);
