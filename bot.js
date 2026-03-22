@@ -151,21 +151,14 @@ function parseTask(text) {
   const t = text.toLowerCase();
 
   const priorityExplicit = {
-    urgent: ["urgent", "срочный", "срочная"],
-    high:   ["высокий", "высокая", "high"],
+    high:   ["высокий", "высокая", "high", "urgent", "срочный", "срочная", "срочно", "asap", "горит", "немедленно", "важно", "надо", "нужно", "не забудь", "обязательно"],
     medium: ["средний", "средняя", "medium"],
     low:    ["низкий", "низкая", "low"],
   };
-  const urgentWords = ["срочно", "asap", "горит", "прямо сейчас", "немедленно"];
-  const highWords   = ["важно", "надо", "нужно", "важная", "не забудь", "обязательно"];
 
   let priority = "medium";
   for (const [p, words] of Object.entries(priorityExplicit)) {
     if (words.some(w => t.includes(w))) { priority = p; break; }
-  }
-  if (priority === "medium") {
-    if (urgentWords.some(w => t.includes(w)))    priority = "urgent";
-    else if (highWords.some(w => t.includes(w))) priority = "high";
   }
 
   const labels = {
@@ -189,9 +182,9 @@ function parseTask(text) {
 
 // ─── Форматирование ─────────────────────────────────────────────────────────
 
-const priorityEmoji = { urgent: "🔴", high: "🟠", medium: "🟡", low: "🟢" };
-const priorityLabel = { urgent: "Срочно", high: "Высокий", medium: "Средний", low: "Низкий" };
-const priorityMapEmoji = { 1: "🔴", 2: "🟠", 3: "🟡", 4: "🟢", 0: "⚪️" };
+const priorityEmoji = { high: "🔴", medium: "🟡", low: "🟢" };
+const priorityLabel = { high: "высокий", medium: "средний", low: "низкий" };
+const priorityMapEmoji = { 1: "🔴", 2: "🔴", 3: "🟡", 4: "🟢", 0: "⚪️" };
 
 function formatReply(task, issue, teamName) {
   return `✅ Задача создана в Linear → ${teamName}\n\n📋 ${issue.title}\n${priorityEmoji[task.priority]} ${priorityLabel[task.priority]} · #${task.label}\n🔗 ${issue.url}`;
@@ -199,35 +192,59 @@ function formatReply(task, issue, teamName) {
 
 // ─── Выбор команды (inline кнопки) ──────────────────────────────────────────
 
-function teamSelectKeyboard(prefix) {
-  return new InlineKeyboard()
-    .text(`${TEAMS.support.emoji} Support`, `${prefix}:support`)
-    .text(`${TEAMS.docops.emoji} DocOps`, `${prefix}:docops`);
+function taskSelectKeyboard(detectedPriority) {
+  const keyboard = new InlineKeyboard()
+    .text(`${TEAMS.support.emoji} Support`, `send:support`)
+    .text(`${TEAMS.docops.emoji} DocOps`, `send:docops`)
+    .row()
+    .text(detectedPriority === "high" ? "🔴 ✓" : "🔴", `prio:high`)
+    .text(detectedPriority === "medium" ? "🟡 ✓" : "🟡", `prio:medium`)
+    .text(detectedPriority === "low" ? "🟢 ✓" : "🟢", `prio:low`);
+  return keyboard;
 }
 
-// ─── Обработка текста → задача → спросить команду ───────────────────────────
+// ─── Обработка текста → задача → спросить команду + приоритет ────────────────
 
 async function handleText(ctx, text) {
   try {
     await ctx.replyWithChatAction("typing");
     console.log("📨 Получил:", text);
     const task = parseTask(text);
+    // urgent → high (три приоритета)
+    if (task.priority === "urgent") task.priority = "high";
     console.log("🧠 Распарсил:", task);
 
-    // Сохраняем задачу, спрашиваем команду
     pendingTask.set(ctx.chat.id, { task });
 
     const pe = priorityEmoji[task.priority];
     const pl = priorityLabel[task.priority];
     await ctx.reply(
-      `📝 *${task.title}*\n${pe} ${pl} · #${task.label}\n\nКуда отправить?`,
-      { parse_mode: "Markdown", reply_markup: teamSelectKeyboard("send") }
+      `📝 *${task.title}*\n${pe} ${pl} · #${task.label}`,
+      { parse_mode: "Markdown", reply_markup: taskSelectKeyboard(task.priority) }
     );
   } catch (e) {
     console.error("❌ Ошибка:", e);
     await ctx.reply("❌ Ошибка: " + e.message);
   }
 }
+
+// Сменить приоритет кнопкой
+bot.callbackQuery(/^prio:(high|medium|low)$/, async (ctx) => {
+  const newPriority = ctx.match[1];
+  const pending = pendingTask.get(ctx.chat.id);
+  if (!pending) return ctx.answerCallbackQuery({ text: "Задача не найдена", show_alert: true });
+
+  pending.task.priority = newPriority;
+  pendingTask.set(ctx.chat.id, pending);
+
+  const pe = priorityEmoji[newPriority];
+  const pl = priorityLabel[newPriority];
+  await ctx.editMessageText(
+    `📝 *${pending.task.title}*\n${pe} ${pl} · #${pending.task.label}`,
+    { parse_mode: "Markdown", reply_markup: taskSelectKeyboard(newPriority) }
+  );
+  await ctx.answerCallbackQuery();
+});
 
 // Выбрал команду → создаём задачу
 bot.callbackQuery(/^send:(support|docops)$/, async (ctx) => {
@@ -258,8 +275,8 @@ const HELP_TEXT = `
 просто напиши текст — выберешь команду (Support / DocOps)
 
 *приоритет*
-пиши в начале: \`высокий\`, \`срочно\`, \`низкий\`
-или бот определит сам по словам
+🔴 высокий · 🟡 средний · 🟢 низкий
+бот определит сам, но можно поменять кнопкой
 
 *форвард*
 перешли любое сообщение → задача из него
