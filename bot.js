@@ -516,13 +516,19 @@ bot.callbackQuery(/^onb:(.+)$/, async (ctx) => {
 
 // ─── /todo → выбор команды → список ─────────────────────────────────────────
 
+const todoTeamsKeyboard = new InlineKeyboard()
+  .text(`${TEAMS.support.emoji} Support`, "todo_team:support")
+  .text(`${TEAMS.docops.emoji} DocOps`, "todo_team:docops")
+  .row()
+  .text("📋 Все задачи", "todo_team:all");
+
 bot.command("todo", async (ctx) => {
-  const keyboard = new InlineKeyboard()
-    .text(`${TEAMS.support.emoji} Support`, "todo_team:support")
-    .text(`${TEAMS.docops.emoji} DocOps`, "todo_team:docops")
-    .row()
-    .text("📋 Все задачи", "todo_team:all");
-  await ctx.reply("Какую команду показать?", { reply_markup: keyboard });
+  await ctx.reply("Какую команду показать?", { reply_markup: todoTeamsKeyboard });
+});
+
+bot.callbackQuery("todo:teams", async (ctx) => {
+  await ctx.editMessageText("Какую команду показать?", { reply_markup: todoTeamsKeyboard });
+  await ctx.answerCallbackQuery();
 });
 
 function formatIssueList(issues) {
@@ -534,7 +540,7 @@ function formatIssueList(issues) {
 // Состояние 1: чистый список
 function viewList(issues, teamLabel) {
   const text = `${teamLabel} — *Активные задачи (${issues.length}):*\n\n${formatIssueList(issues)}`;
-  const keyboard = new InlineKeyboard().text("🔄 Обновить", `todo:refresh:${teamLabel}`);
+  const keyboard = new InlineKeyboard().text("🔄 Обновить", `todo:refresh:${teamLabel}`).text("⬅️", `todo:teams`);
   return { text, keyboard };
 }
 
@@ -543,7 +549,7 @@ function viewConfirm(issues, teamLabel) {
   const text = `${teamLabel} — *Активные задачи (${issues.length}):*\n\n${formatIssueList(issues)}`;
   const keyboard = new InlineKeyboard()
     .text("✏️ изменить", `todo:edit_mode:${teamLabel}`)
-    .text("⬅️", `todo:back:${teamLabel}`);
+    .text("⬅️", `todo:teams`);
   return { text, keyboard };
 }
 
