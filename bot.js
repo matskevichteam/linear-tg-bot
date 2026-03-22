@@ -74,6 +74,22 @@ async function createLinearComment(issueId, body) {
   return json.data?.commentCreate?.success ?? false;
 }
 
+async function completeLinearIssue(id) {
+  // Сначала узнаём команду задачи, потом ставим Done для этой команды
+  const issueJson = await linearGQL(`{ issue(id: "${id}") { team { id } } }`);
+  const teamId = issueJson.data?.issue?.team?.id;
+  const doneStates = {
+    "f36e0f1a-e439-44e8-8f43-22f92e37cde7": "fb379f65-11fc-4cf7-b289-2244b33bf58c", // support
+    "75e41827-d5c1-4e80-89f0-7208651b74f0": "fbdfacab-ced5-4903-844d-2f2195fb2182", // docops
+  };
+  const stateId = doneStates[teamId];
+  if (!stateId) return false;
+  const json = await linearGQL(
+    `mutation { issueUpdate(id: "${id}", input: { stateId: "${stateId}" }) { success } }`
+  );
+  return json.data?.issueUpdate?.success ?? false;
+}
+
 async function deleteLinearIssue(id) {
   const json = await linearGQL(`mutation { issueDelete(id: "${id}") { success } }`);
   return json.data?.issueDelete?.success ?? false;
@@ -254,11 +270,14 @@ const HELP_TEXT = `
 *комментарий*
 ответь (reply) на сообщение бота → комментарий улетит в Linear
 
+*закрыть задачу*
+ответь (reply) → \`готово\` или нажми ✅ в /todo
+
 *удалить задачу*
-ответь (reply) на сообщение бота и напиши \`удалить\`
+ответь (reply) → \`удалить\` или нажми 🗑 в /todo
 
 *команды*
-/todo — список активных задач
+/todo — задачи (✅ закрыть · 🗑 удалить)
 /help — это сообщение
 /docs — документация по боту
 
@@ -514,7 +533,7 @@ function viewDeleteMode(issues, teamLabel) {
   for (const issue of issues) {
     const emoji = priorityMapEmoji[issue.priority] ?? "⚪️";
     const title = issue.title.length > 32 ? issue.title.slice(0, 30) + "…" : issue.title;
-    keyboard.url(`${emoji} ${title}`, issue.url).text("🗑", `del:${issue.id}:${teamLabel}`).row();
+    keyboard.url(`${emoji} ${title}`, issue.url).text("✅", `done:${issue.id}:${teamLabel}`).text("🗑", `del:${issue.id}:${teamLabel}`).row();
   }
   keyboard.text("⬅️ Назад", `todo:back:${teamLabel}`);
   return { text, keyboard };
@@ -592,6 +611,25 @@ bot.callbackQuery(/^todo:back:(.+)$/, async (ctx) => {
   }
 });
 
+// Выполнить задачу → обновить список
+bot.callbackQuery(/^done:([^:]+):(.+)$/, async (ctx) => {
+  const id = ctx.match[1];
+  const teamLabel = ctx.match[2];
+  const teamId = resolveTeamId(teamLabel);
+
+  const ok = await completeLinearIssue(id);
+  if (!ok) return ctx.answerCallbackQuery({ text: "❌ Не удалось завершить", show_alert: true });
+
+  const issues = await getActiveIssues(teamId);
+  if (issues.length === 0) {
+    await ctx.editMessageText(`${teamLabel} — ✅ Все задачи выполнены!`, { reply_markup: new InlineKeyboard() });
+  } else {
+    const { text, keyboard } = viewDeleteMode(issues, teamLabel);
+    await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: keyboard });
+  }
+  await ctx.answerCallbackQuery({ text: "✅ Выполнено" });
+});
+
 // Удалить задачу → обновить режим удаления
 bot.callbackQuery(/^del:([^:]+):(.+)$/, async (ctx) => {
   const id = ctx.match[1];
@@ -637,6 +675,22 @@ bot.on("message:text", async (ctx) => {
       "Отправь мне:\n• Текст → создам задачу в Linear\n• Форвард → разберу и создам задачу\n• Голосовое → транскрибирую и создам задачи",
       { reply_markup: keyboard }
     );
+  }
+
+  // Готово
+  if (textLower === "готово" || textLower === "done" || textLower === "выполнено") {
+    let issue = null;
+    const replyText = ctx.message.reply_to_message?.text;
+    if (replyText) {
+      const urlMatch = replyText.match(/linear\.app\/[^\s]+\/issue\/([A-Z\d]+-\d+)\//);
+      if (urlMatch) issue = await findIssueByKey(urlMatch[1]);
+    }
+    if (!issue) issue = lastIssue.get(ctx.chat.id);
+    if (!issue) return ctx.reply("Нет задачи.\nОтветь (reply) на сообщение бота с задачей и напиши «готово».");
+
+    const ok = await completeLinearIssue(issue.id);
+    if (ok) return ctx.reply(`✅ Выполнено: ${issue.title}`);
+    else return ctx.reply("❌ Не удалось завершить задачу");
   }
 
   // Удалить
