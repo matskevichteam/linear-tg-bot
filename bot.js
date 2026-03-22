@@ -538,25 +538,25 @@ function viewList(issues, teamLabel) {
   return { text, keyboard };
 }
 
-// Состояние 2: подтверждение удаления
+// Состояние 2: подтверждение
 function viewConfirm(issues, teamLabel) {
-  const text = `${teamLabel} — *Активные задачи (${issues.length}):*\n\n${formatIssueList(issues)}\n\n_Хочешь удалить задачу?_`;
+  const text = `${teamLabel} — *Активные задачи (${issues.length}):*\n\n${formatIssueList(issues)}`;
   const keyboard = new InlineKeyboard()
-    .text("🗑 Удалить", `todo:delete_mode:${teamLabel}`)
-    .text("⬅️ Назад", `todo:back:${teamLabel}`);
+    .text("✏️ изменить", `todo:edit_mode:${teamLabel}`)
+    .text("⬅️", `todo:back:${teamLabel}`);
   return { text, keyboard };
 }
 
-// Состояние 3: список с кнопками удаления
-function viewDeleteMode(issues, teamLabel) {
-  const text = `${teamLabel} — *Выбери задачу для удаления:*`;
+// Состояние 3: список с кнопками ✅ и 🗑
+function viewEditMode(issues, teamLabel) {
+  const text = `${teamLabel} — *выбери задачу:*`;
   const keyboard = new InlineKeyboard();
   for (const issue of issues) {
     const emoji = priorityMapEmoji[issue.priority] ?? "⚪️";
-    const title = issue.title.length > 32 ? issue.title.slice(0, 30) + "…" : issue.title;
+    const title = issue.title.length > 25 ? issue.title.slice(0, 23) + "…" : issue.title;
     keyboard.url(`${emoji} ${title}`, issue.url).text("✅", `done:${issue.id}:${teamLabel}`).text("🗑", `del:${issue.id}:${teamLabel}`).row();
   }
-  keyboard.text("⬅️ Назад", `todo:back:${teamLabel}`);
+  keyboard.text("⬅️", `todo:back:${teamLabel}`);
   return { text, keyboard };
 }
 
@@ -604,11 +604,11 @@ bot.callbackQuery(/^todo:refresh:(.+)$/, async (ctx) => {
 });
 
 // Да, удалить → режим удаления
-bot.callbackQuery(/^todo:delete_mode:(.+)$/, async (ctx) => {
+bot.callbackQuery(/^todo:edit_mode:(.+)$/, async (ctx) => {
   const teamLabel = ctx.match[1];
   const teamId = resolveTeamId(teamLabel);
   const issues = await getActiveIssues(teamId);
-  const { text, keyboard } = viewDeleteMode(issues, teamLabel);
+  const { text, keyboard } = viewEditMode(issues, teamLabel);
   await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: keyboard });
   await ctx.answerCallbackQuery();
 });
@@ -645,7 +645,7 @@ bot.callbackQuery(/^done:([^:]+):(.+)$/, async (ctx) => {
   if (issues.length === 0) {
     await ctx.editMessageText(`${teamLabel} — ✅ Все задачи выполнены!`, { reply_markup: new InlineKeyboard() });
   } else {
-    const { text, keyboard } = viewDeleteMode(issues, teamLabel);
+    const { text, keyboard } = viewEditMode(issues, teamLabel);
     await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: keyboard });
   }
   await ctx.answerCallbackQuery({ text: "✅ Выполнено" });
@@ -664,7 +664,7 @@ bot.callbackQuery(/^del:([^:]+):(.+)$/, async (ctx) => {
   if (issues.length === 0) {
     await ctx.editMessageText(`${teamLabel} — ✅ Все задачи выполнены!`, { reply_markup: new InlineKeyboard() });
   } else {
-    const { text, keyboard } = viewDeleteMode(issues, teamLabel);
+    const { text, keyboard } = viewEditMode(issues, teamLabel);
     await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: keyboard });
   }
   await ctx.answerCallbackQuery({ text: "🗑 Удалено" });
