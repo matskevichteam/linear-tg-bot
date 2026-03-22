@@ -51,8 +51,12 @@ async function createLinearIssue({ title, description, priority, label, teamId }
 }
 
 async function findIssueByKey(key) {
-  const json = await linearGQL(`{ issue(id: "${key}") { id title url } }`);
-  return json.data?.issue ?? null;
+  // Сначала пробуем как UUID
+  let json = await linearGQL(`{ issue(id: "${key}") { id title url } }`);
+  if (json.data?.issue) return json.data.issue;
+  // Потом ищем по ключу (GCO-21)
+  json = await linearGQL(`{ issueSearch(query: "${key}", first: 1) { nodes { id title url } } }`);
+  return json.data?.issueSearch?.nodes?.[0] ?? null;
 }
 
 async function getActiveIssues(teamId) {
@@ -699,7 +703,7 @@ bot.on("message:text", async (ctx) => {
     let issue = null;
     const replyText = ctx.message.reply_to_message?.text;
     if (replyText) {
-      const urlMatch = replyText.match(/linear\.app\/[^\s]+\/issue\/([A-Z\d]+-\d+)\//);
+      const urlMatch = replyText.match(/linear\.app\/[^\s]*\/issue\/([A-Z\d]+-\d+)/);
       if (urlMatch) issue = await findIssueByKey(urlMatch[1]);
     }
     if (!issue) issue = lastIssue.get(ctx.chat.id);
@@ -716,7 +720,7 @@ bot.on("message:text", async (ctx) => {
 
     const replyText = ctx.message.reply_to_message?.text;
     if (replyText) {
-      const urlMatch = replyText.match(/linear\.app\/[^\s]+\/issue\/([A-Z\d]+-\d+)\//);
+      const urlMatch = replyText.match(/linear\.app\/[^\s]*\/issue\/([A-Z\d]+-\d+)/);
       if (urlMatch) {
         issue = await findIssueByKey(urlMatch[1]);
       }
@@ -737,7 +741,7 @@ bot.on("message:text", async (ctx) => {
   // Reply на сообщение бота → комментарий в Linear
   const replyText = ctx.message.reply_to_message?.text;
   if (replyText) {
-    const urlMatch = replyText.match(/linear\.app\/[^\s]+\/issue\/([A-Z\d]+-\d+)\//);
+    const urlMatch = replyText.match(/linear\.app\/[^\s]*\/issue\/([A-Z\d]+-\d+)/);
     if (urlMatch) {
       const issue = await findIssueByKey(urlMatch[1]);
       if (issue) {
