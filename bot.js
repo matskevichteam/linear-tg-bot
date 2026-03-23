@@ -198,12 +198,12 @@ function formatReply(task, issue, teamName) {
 
 function taskSelectKeyboard(detectedPriority) {
   const keyboard = new InlineKeyboard()
-    .text(`${TEAMS.support.emoji} Support`, `send:support`)
-    .text(`${TEAMS.docops.emoji} DocOps`, `send:docops`)
-    .row()
     .text(detectedPriority === "high" ? "🔴 ✓" : "🔴", `prio:high`)
     .text(detectedPriority === "medium" ? "🟡 ✓" : "🟡", `prio:medium`)
-    .text(detectedPriority === "low" ? "🟢 ✓" : "🟢", `prio:low`);
+    .text(detectedPriority === "low" ? "🟢 ✓" : "🟢", `prio:low`)
+    .row()
+    .text(`${TEAMS.support.emoji} Support`, `send:support`)
+    .text(`${TEAMS.docops.emoji} DocOps`, `send:docops`);
   return keyboard;
 }
 
