@@ -345,7 +345,8 @@ const ONB = {
     kb: () => new InlineKeyboard()
       .text("🛸 Вход", "onb:part1").row()
       .text("🎤 Тон", "onb:part2").row()
-      .text("⚡️ Флоу", "onb:part3"),
+      .text("⚡️ Флоу", "onb:part3").row()
+      .text("⬅️", "onb:close"),
   },
 
   // ── Часть 1 ──
@@ -515,6 +516,11 @@ bot.callbackQuery(/^onb:(.+)$/, async (ctx) => {
   if (key === "back") {
     const { text, kb } = ONB.main;
     await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: kb() });
+    return ctx.answerCallbackQuery();
+  }
+
+  if (key === "close") {
+    await ctx.editMessageText("📚 онбординг закрыт. /onboarding чтобы открыть снова.");
     return ctx.answerCallbackQuery();
   }
 
