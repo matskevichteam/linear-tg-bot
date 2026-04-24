@@ -51,9 +51,9 @@ const ONB = {
       `🤖 *этот бот*\n` +
       `/todo — задачи, /help — справка.\n` +
       `текст или голосовое → задача улетит в Linear.\n\n` +
-      `📝 *Cursor* — $20/мес\n` +
-      `AI-редактор. корп. аккаунт: попроси Лёшу (@atassist)\n\n` +
-      `⌨️ *Claude Code / Codex* — $20/мес\n` +
+      `📝 *Cursor* — $20/мес (к @matsako)\n` +
+      `AI-редактор. корп. аккаунт.\n\n` +
+      `⌨️ *Claude Code / Codex* — $20/мес (к @matsako)\n` +
       `работает через терминал внутри Cursor.`,
     kb: () => new InlineKeyboard().text("⬅️", "onb:part1"),
   },
@@ -182,10 +182,12 @@ export { ONB };
 // ─── Register handlers ──────────────────────────────────────────────────────
 
 export function registerOnboarding() {
-  bot.command("onboarding", async (ctx) => {
+  const openMain = async (ctx) => {
     const { text, kb } = ONB.main;
     return ctx.reply(text, { parse_mode: "Markdown", reply_markup: kb() });
-  });
+  };
+  bot.command("onboarding", openMain);
+  bot.command("menu", openMain);
 
   // Навигация по онбордингу
   bot.callbackQuery(/^onb:(.+)$/, async (ctx) => {

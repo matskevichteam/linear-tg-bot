@@ -20,6 +20,11 @@ export function registerMessageHandlers() {
     const text = ctx.message.text.trim();
     const textLower = text.toLowerCase();
 
+    // Неизвестная слэш-команда — не создаём из неё задачу
+    if (text.startsWith("/")) {
+      return ctx.reply("не знаю такую команду. посмотри /help или меню ☰ слева");
+    }
+
     // Онбординг
     if (text === "📚 Онбординг") {
       const { text: onbText, kb } = ONB.main;

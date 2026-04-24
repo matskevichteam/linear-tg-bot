@@ -32,7 +32,7 @@ registerMessageHandlers(); // message logger, text router, forward, voice (LAST 
 
 bot.api.setMyCommands([
   { command: "start", description: "🫧 Старт" },
-  { command: "onboarding", description: "🛸 Онбординг" },
+  { command: "menu", description: "🛸 Меню / онбординг" },
   { command: "todo", description: "⚡️ Задачи" },
   { command: "help", description: "💡 Справка" },
   { command: "docs", description: "🔗 Документация" },
