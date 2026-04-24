@@ -14,6 +14,7 @@
 //     messages.js      — text router, forward, voice
 
 import { bot } from "./src/config.js";
+import { fetchDoneStates } from "./src/linear.js";
 import { registerOnboarding } from "./src/onboarding.js";
 import { registerCommands } from "./src/handlers/commands.js";
 import { registerTaskHandlers } from "./src/handlers/tasks.js";
@@ -40,5 +41,6 @@ bot.api.setMyCommands([
 
 // ─── Start ──────────────────────────────────────────────────────────────────
 
+await fetchDoneStates(); // подгружаем Done-state'ы из Linear (fallback внутри)
 bot.start();
 console.log("🤖 Бот запущен");

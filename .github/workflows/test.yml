@@ -1,0 +1,27 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # Dummy-значения — тесты мокают fetch и не делают реальных API-вызовов.
+      # Реальные секреты живут в Railway Variables, не в CI.
+      TELEGRAM_BOT_TOKEN: "123456:dummy-token-for-ci"
+      LINEAR_API_KEY: "dummy"
+      LINEAR_TEAM_ID: "00000000-0000-0000-0000-000000000001"
+      DOCOPS_TEAM_ID: "00000000-0000-0000-0000-000000000002"
+      GROQ_API_KEY: "dummy"
+      DATA_DIR: "./ci-data"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - run: node test.js

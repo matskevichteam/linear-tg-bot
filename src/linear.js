@@ -67,6 +67,48 @@ export async function createLinearComment(issueId, body) {
   return json.data?.commentCreate?.success ?? false;
 }
 
+// ─── Workflow states cache ──────────────────────────────────────────────────
+// Раньше было hardcoded: Map<teamId, completedStateId>.
+// Теперь грузится с Linear при старте. Hardcoded — fallback на случай оффлайна.
+
+const FALLBACK_DONE_STATES = {
+  "f36e0f1a-e439-44e8-8f43-22f92e37cde7": "fb379f65-11fc-4cf7-b289-2244b33bf58c", // support
+  "75e41827-d5c1-4e80-89f0-7208651b74f0": "fbdfacab-ced5-4903-844d-2f2195fb2182", // docops
+};
+const doneStatesCache = new Map(Object.entries(FALLBACK_DONE_STATES));
+
+export async function fetchDoneStates() {
+  try {
+    const json = await linearGQL(
+      `query DoneStates {
+        workflowStates(filter: { type: { eq: "completed" } }, first: 50) {
+          nodes { id team { id } }
+        }
+      }`
+    );
+    const nodes = json.data?.workflowStates?.nodes ?? [];
+    let count = 0;
+    for (const node of nodes) {
+      if (node.team?.id && node.id) {
+        doneStatesCache.set(node.team.id, node.id);
+        count++;
+      }
+    }
+    console.log(`💾 linear: загружено ${count} Done state'ов`);
+    return count;
+  } catch (e) {
+    console.error("⚠️ linear: не удалось загрузить workflow states, использую fallback:", e.message);
+    return 0;
+  }
+}
+
+export function getDoneStateId(teamId) {
+  return doneStatesCache.get(teamId) ?? null;
+}
+
+// Тестовый хелпер
+export const __internals = { doneStatesCache, FALLBACK_DONE_STATES };
+
 export async function completeLinearIssue(id) {
   // Сначала узнаём команду задачи, потом ставим Done для этой команды
   const issueJson = await linearGQL(
@@ -74,12 +116,12 @@ export async function completeLinearIssue(id) {
     { id }
   );
   const teamId = issueJson.data?.issue?.team?.id;
-  const doneStates = {
-    "f36e0f1a-e439-44e8-8f43-22f92e37cde7": "fb379f65-11fc-4cf7-b289-2244b33bf58c", // support
-    "75e41827-d5c1-4e80-89f0-7208651b74f0": "fbdfacab-ced5-4903-844d-2f2195fb2182", // docops
-  };
-  const stateId = doneStates[teamId];
-  if (!stateId) return false;
+  if (!teamId) return false;
+  const stateId = getDoneStateId(teamId);
+  if (!stateId) {
+    console.error(`⚠️ completeLinearIssue: нет Done state'а для team ${teamId}`);
+    return false;
+  }
   const json = await linearGQL(
     `mutation CompleteIssue($id: String!, $stateId: String!) {
       issueUpdate(id: $id, input: { stateId: $stateId }) { success }

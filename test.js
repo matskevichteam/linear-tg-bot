@@ -428,6 +428,83 @@ await asyncTest("completeLinearIssue / deleteLinearIssue: id через variable
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+console.log("\n🧭 Linear: workflow states cache");
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test("getDoneStateId: есть hardcoded fallback для known teamId", () => {
+  const supportId = "f36e0f1a-e439-44e8-8f43-22f92e37cde7";
+  assert.ok(linear.getDoneStateId(supportId), "support fallback не найден");
+  const docopsId = "75e41827-d5c1-4e80-89f0-7208651b74f0";
+  assert.ok(linear.getDoneStateId(docopsId), "docops fallback не найден");
+});
+
+test("getDoneStateId: unknown teamId → null", () => {
+  assert.strictEqual(linear.getDoneStateId("unknown-team-id"), null);
+});
+
+await asyncTest("fetchDoneStates: обновляет кэш из Linear", async () => {
+  mockFetch({
+    data: {
+      workflowStates: {
+        nodes: [
+          { id: "new-done-state-1", team: { id: "team-new-1" } },
+          { id: "new-done-state-2", team: { id: "team-new-2" } },
+        ],
+      },
+    },
+  });
+  const count = await linear.fetchDoneStates();
+  assert.strictEqual(count, 2);
+  assert.strictEqual(linear.getDoneStateId("team-new-1"), "new-done-state-1");
+  assert.strictEqual(linear.getDoneStateId("team-new-2"), "new-done-state-2");
+  restoreFetch();
+});
+
+await asyncTest("fetchDoneStates: при ошибке API возвращает 0, кэш не трогает", async () => {
+  globalThis.fetch = async () => { throw new Error("network fail"); };
+  const count = await linear.fetchDoneStates();
+  assert.strictEqual(count, 0);
+  // Hardcoded fallback всё ещё работает
+  assert.ok(linear.getDoneStateId("f36e0f1a-e439-44e8-8f43-22f92e37cde7"));
+  restoreFetch();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log("\n💿 State persistence");
+// ═══════════════════════════════════════════════════════════════════════════════
+
+import fsNode from "node:fs";
+
+test("saveSync → loadState round-trip", async () => {
+  // Чистим всё, пишем, читаем заново (модуль уже в памяти, но файл пересоздадим)
+  state.deletePending(1); state.deletePending(2); state.deleteLastIssue(3);
+  state.setPending(1, { task: { title: "A" } });
+  state.setPending(2, { task: { title: "B" } });
+  state.setLastIssue(3, { id: "iss-1", title: "C", url: "u" });
+  state.__internals.saveSync();
+
+  // Проверяем, что файл создан и содержит данные
+  const raw = fsNode.readFileSync(state.__internals.STATE_FILE, "utf8");
+  const parsed = JSON.parse(raw);
+  assert.strictEqual(parsed.pendingTask.length, 2);
+  assert.strictEqual(parsed.lastIssue.length, 1);
+  // Cleanup
+  state.deletePending(1); state.deletePending(2); state.deleteLastIssue(3);
+  state.__internals.saveSync();
+});
+
+test("setPending → debounced save создаёт файл", async () => {
+  state.setPending(42, { task: { title: "debounce test" } });
+  // Ждём > 100ms debounce
+  await new Promise(r => setTimeout(r, 150));
+  assert.ok(fsNode.existsSync(state.__internals.STATE_FILE));
+  const raw = fsNode.readFileSync(state.__internals.STATE_FILE, "utf8");
+  assert.ok(raw.includes("debounce test"));
+  state.deletePending(42);
+  await new Promise(r => setTimeout(r, 150));
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Results
 // ═══════════════════════════════════════════════════════════════════════════════
 

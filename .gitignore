@@ -4,3 +4,13 @@ node_modules
 *.key
 *.pem
 credentials.*
+
+# persistent state (локально и в CI)
+data/
+ci-data/
+
+# macOS
+.DS_Store
+
+# локальные бэкапы
+*.bak
