@@ -172,6 +172,26 @@ test("description preserves full text", () => {
 console.log("\n📊 Format functions");
 // ═══════════════════════════════════════════════════════════════════════════════
 
+test("escapeMd: экранирует _, *, `, [ (ломающие Markdown парсер Telegram)", () => {
+  assert.strictEqual(format.escapeMd("mari_zaychik"), "mari\\_zaychik");
+  assert.strictEqual(format.escapeMd("*bold*"), "\\*bold\\*");
+  assert.strictEqual(format.escapeMd("code `x`"), "code \\`x\\`");
+  assert.strictEqual(format.escapeMd("array[0]"), "array\\[0]");
+  assert.strictEqual(format.escapeMd("plain text"), "plain text");
+  assert.strictEqual(format.escapeMd(null), "");
+  assert.strictEqual(format.escapeMd(undefined), "");
+});
+
+test("formatIssueList: экранирует _ в титлах задач (регрессионный баг)", () => {
+  const issues = [
+    { title: "разобраться с @mari_zaychik", priority: 2 },
+    { title: "plain title", priority: 3 },
+  ];
+  const list = format.formatIssueList(issues);
+  assert.ok(list.includes("mari\\_zaychik"), "underscore должен быть экранирован");
+  assert.ok(list.includes("plain title"), "обычный текст не должен меняться");
+});
+
 test("formatReply contains issue title and URL", () => {
   const task = { priority: "high", label: "платежи" };
   const issue = { title: "Тестовая задача", url: "https://linear.app/test" };

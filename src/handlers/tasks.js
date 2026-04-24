@@ -3,7 +3,7 @@
 import { bot, TEAMS } from "../config.js";
 import { getPending, setPending, deletePending, recoverPending, setLastIssue } from "../state.js";
 import { createLinearIssue } from "../linear.js";
-import { parseTask, priorityEmoji, priorityLabel, taskSelectKeyboard, formatReply } from "../format.js";
+import { parseTask, priorityEmoji, priorityLabel, taskSelectKeyboard, formatReply, escapeMd } from "../format.js";
 
 // ─── Handle incoming text → task ────────────────────────────────────────────
 
@@ -21,7 +21,7 @@ export async function handleText(ctx, text) {
     const pe = priorityEmoji[task.priority];
     const pl = priorityLabel[task.priority];
     await ctx.reply(
-      `📝 *${task.title}*\n${pe} ${pl} · #${task.label}`,
+      `📝 *${escapeMd(task.title)}*\n${pe} ${pl} · #${task.label}`,
       { parse_mode: "Markdown", reply_markup: taskSelectKeyboard(task.priority) }
     );
   } catch (e) {
@@ -46,7 +46,7 @@ export function registerTaskHandlers() {
       const pe = priorityEmoji[newPriority];
       const pl = priorityLabel[newPriority];
       await ctx.editMessageText(
-        `📝 *${pending.task.title}*\n${pe} ${pl} · #${pending.task.label}`,
+        `📝 *${escapeMd(pending.task.title)}*\n${pe} ${pl} · #${pending.task.label}`,
         { parse_mode: "Markdown", reply_markup: taskSelectKeyboard(newPriority) }
       );
       await ctx.answerCallbackQuery();

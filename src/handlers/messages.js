@@ -4,7 +4,7 @@ import { bot, Keyboard } from "../config.js";
 import { getLastIssue, deleteLastIssue, setPending } from "../state.js";
 import { findIssueByKey, completeLinearIssue, deleteLinearIssue, createLinearComment } from "../linear.js";
 import { downloadTelegramFile, transcribeVoice } from "../groq.js";
-import { parseTask, priorityEmoji, priorityLabel, taskSelectKeyboard } from "../format.js";
+import { parseTask, priorityEmoji, priorityLabel, taskSelectKeyboard, escapeMd } from "../format.js";
 import { ONB } from "../onboarding.js";
 import { handleText } from "./tasks.js";
 
@@ -117,7 +117,7 @@ export function registerMessageHandlers() {
       const transcript = await transcribeVoice(fileBuffer);
       console.log("🎤 Транскрипция:", transcript);
 
-      await ctx.reply(`🎤 _${transcript}_`, { parse_mode: "Markdown" });
+      await ctx.reply(`🎤 _${escapeMd(transcript)}_`, { parse_mode: "Markdown" });
 
       // Парсим и спрашиваем команду
       const task = parseTask(transcript);
@@ -126,7 +126,7 @@ export function registerMessageHandlers() {
       const pe = priorityEmoji[task.priority];
       const pl = priorityLabel[task.priority];
       await ctx.reply(
-        `📝 *${task.title}*\n${pe} ${pl} · #${task.label}\n\nКуда отправить?`,
+        `📝 *${escapeMd(task.title)}*\n${pe} ${pl} · #${task.label}\n\nКуда отправить?`,
         { parse_mode: "Markdown", reply_markup: taskSelectKeyboard(task.priority) }
       );
     } catch (e) {

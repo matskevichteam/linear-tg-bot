@@ -8,6 +8,15 @@ export const priorityEmoji = { high: "🔴", medium: "🟡", low: "🟢" };
 export const priorityLabel = { high: "высокий", medium: "средний", low: "низкий" };
 export const priorityMapEmoji = { 1: "🔴", 2: "🔴", 3: "🟡", 4: "🟢", 0: "⚪️" };
 
+// ─── Markdown escape ────────────────────────────────────────────────────────
+// Telegram legacy Markdown интерпретирует _, *, `, [ как форматирование.
+// Любой user-input (title, description, transcript) ДОЛЖЕН быть экранирован
+// перед вставкой в Markdown-сообщение, иначе одинокий _ в никнейме вроде
+// @mari_zaychik ломает парсер и editMessageText падает.
+export function escapeMd(text) {
+  return String(text ?? "").replace(/([_*`\[])/g, "\\$1");
+}
+
 // ─── Parse task from text ───────────────────────────────────────────────────
 
 export function parseTask(text) {
@@ -44,6 +53,9 @@ export function parseTask(text) {
 }
 
 // ─── Format reply ───────────────────────────────────────────────────────────
+// Это сообщение отправляется БЕЗ parse_mode (plain text), поэтому escapeMd
+// здесь не нужен. Но если захочешь добавить *bold* — не забудь escape'ить
+// issue.title, task.label и teamName.
 
 export function formatReply(task, issue, teamName) {
   return `✅ Задача создана в Linear → ${teamName}\n\n📋 ${issue.title}\n${priorityEmoji[task.priority]} ${priorityLabel[task.priority]} · #${task.label}\n🔗 ${issue.url}`;
@@ -66,7 +78,7 @@ export function taskSelectKeyboard(detectedPriority) {
 
 export function formatIssueList(issues) {
   return issues
-    .map(i => `${priorityMapEmoji[i.priority] ?? "⚪️"} ${i.title}`)
+    .map(i => `${priorityMapEmoji[i.priority] ?? "⚪️"} ${escapeMd(i.title)}`)
     .join("\n");
 }
 
