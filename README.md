@@ -2,6 +2,22 @@
 
 Telegram-бот для управления задачами в Linear. Создаёт задачи голосом, текстом или форвардом — прямо из Telegram.
 
+## 🔑 Владение сервисами (handover)
+
+Все аккаунты привязаны к **`matskevichteam@gmail.com`**:
+
+| Сервис | Что там | Как попасть |
+|---|---|---|
+| **GitHub** | код бота (этот репо) | github.com/matskevichteam/linear-tg-bot |
+| **Railway** | деплой (auto-deploy из `main`) | railway.app → проект `linear-tg-bot` |
+| **Linear** | рабочие команды GCO (Support) и 1 (DocOps) | linear.app/gconf-support |
+
+Пароли и сессии — в чате **GCONF FILES** (telegram).
+
+- **Если бот замолчал** → Railway dashboard → проект → Deployments → Logs. Обычно либо кончились credits, либо упал rebuild.
+- **Проверить живой ли процесс**: `curl -s "https://api.telegram.org/bot<TOKEN>/getWebhookInfo"` — если `pending_update_count` растёт, процесс не крутится.
+- **Все env-переменные** (`TELEGRAM_BOT_TOKEN`, `LINEAR_API_KEY`, `LINEAR_TEAM_ID`, `DOCOPS_TEAM_ID`, `GROQ_API_KEY`) хранятся в Railway → Variables.
+
 ## Возможности
 
 - **Текст → задача** — напиши текст, выбери команду (Support / DocOps), задача создана

@@ -206,8 +206,45 @@ test("formatIssueList formats multiple issues", () => {
   assert.ok(list.includes("🟢"));
 });
 
-test("resolveTeamId returns null for 'Все задачи'", () => {
-  assert.strictEqual(format.resolveTeamId("📋 Все задачи"), null);
+test("resolveTeamId: 'all' → null, team key → teamId", () => {
+  assert.strictEqual(format.resolveTeamId("all"), null);
+  assert.ok(format.resolveTeamId("support"));
+  assert.ok(format.resolveTeamId("docops"));
+  assert.strictEqual(format.resolveTeamId("unknown"), null);
+});
+
+test("resolveTeamLabel: 'all' → 'Все задачи', team key → emoji+name", () => {
+  assert.strictEqual(format.resolveTeamLabel("all"), "📋 Все задачи");
+  assert.ok(format.resolveTeamLabel("support").includes("Support"));
+  assert.ok(format.resolveTeamLabel("docops").includes("DocOps"));
+});
+
+test("todo callback_data stays under Telegram's 64-byte limit", () => {
+  // Самый длинный callback: done/del с UUID + самый длинный teamKey
+  const uuid = "e7789cf3-755a-42c6-8a0d-b33418f9b8de"; // 36 bytes
+  const teamKeys = ["support", "docops", "all"];
+  for (const key of teamKeys) {
+    const doneCb = `done:${uuid}:${key}`;
+    const delCb = `del:${uuid}:${key}`;
+    assert.ok(Buffer.byteLength(doneCb, "utf8") <= 64, `done:${key} too long: ${Buffer.byteLength(doneCb, "utf8")} bytes`);
+    assert.ok(Buffer.byteLength(delCb, "utf8") <= 64, `del:${key} too long: ${Buffer.byteLength(delCb, "utf8")} bytes`);
+  }
+});
+
+test("todo view functions build keyboards with short callback_data", () => {
+  const issues = [{ id: "e7789cf3-755a-42c6-8a0d-b33418f9b8de", title: "test", priority: 2, url: "https://linear.app/x" }];
+  const { keyboard } = format.viewEditMode(issues, "all", "📋 Все задачи");
+  const rows = keyboard.inline_keyboard;
+  for (const row of rows) {
+    for (const btn of row) {
+      if (btn.callback_data) {
+        assert.ok(
+          Buffer.byteLength(btn.callback_data, "utf8") <= 64,
+          `callback_data too long (${Buffer.byteLength(btn.callback_data, "utf8")} bytes): ${btn.callback_data}`
+        );
+      }
+    }
+  }
 });
 
 test("taskSelectKeyboard returns InlineKeyboard", () => {

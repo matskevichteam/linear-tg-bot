@@ -71,38 +71,43 @@ export function formatIssueList(issues) {
 }
 
 // Состояние 1: чистый список
-export function viewList(issues, teamLabel) {
+export function viewList(issues, teamKey, teamLabel) {
   const text = `${teamLabel} — *Активные задачи (${issues.length}):*\n\n${formatIssueList(issues)}`;
-  const keyboard = new InlineKeyboard().text("🔄 Обновить", `todo:refresh:${teamLabel}`).text("⬅️", `todo:teams`);
+  const keyboard = new InlineKeyboard().text("🔄 Обновить", `todo:refresh:${teamKey}`).text("⬅️", `todo:teams`);
   return { text, keyboard };
 }
 
 // Состояние 2: подтверждение
-export function viewConfirm(issues, teamLabel) {
+export function viewConfirm(issues, teamKey, teamLabel) {
   const text = `${teamLabel} — *Активные задачи (${issues.length}):*\n\n${formatIssueList(issues)}`;
   const keyboard = new InlineKeyboard()
-    .text("✏️ изменить", `todo:edit_mode:${teamLabel}`)
+    .text("✏️ изменить", `todo:edit_mode:${teamKey}`)
     .text("⬅️", `todo:teams`);
   return { text, keyboard };
 }
 
 // Состояние 3: список с кнопками ✅ и 🗑
-export function viewEditMode(issues, teamLabel) {
+export function viewEditMode(issues, teamKey, teamLabel) {
   const text = `${teamLabel} — *выбери задачу:*`;
   const keyboard = new InlineKeyboard();
   for (const issue of issues) {
     const emoji = priorityMapEmoji[issue.priority] ?? "⚪️";
     const title = issue.title.length > 25 ? issue.title.slice(0, 23) + "…" : issue.title;
-    keyboard.url(`${emoji} ${title}`, issue.url).text("✅", `done:${issue.id}:${teamLabel}`).text("🗑", `del:${issue.id}:${teamLabel}`).row();
+    keyboard.url(`${emoji} ${title}`, issue.url).text("✅", `done:${issue.id}:${teamKey}`).text("🗑", `del:${issue.id}:${teamKey}`).row();
   }
-  keyboard.text("⬅️", `todo:back:${teamLabel}`);
+  keyboard.text("⬅️", `todo:back:${teamKey}`);
   return { text, keyboard };
 }
 
-export function resolveTeamId(teamLabel) {
-  if (teamLabel === "📋 Все задачи") return null;
-  for (const t of Object.values(TEAMS)) {
-    if (`${t.emoji} ${t.name}` === teamLabel) return t.id;
-  }
-  return null;
+// teamKey → teamId (null для "all")
+export function resolveTeamId(teamKey) {
+  if (teamKey === "all") return null;
+  return TEAMS[teamKey]?.id ?? null;
+}
+
+// teamKey → отображаемый лейбл
+export function resolveTeamLabel(teamKey) {
+  if (teamKey === "all") return "📋 Все задачи";
+  const t = TEAMS[teamKey];
+  return t ? `${t.emoji} ${t.name}` : teamKey;
 }
