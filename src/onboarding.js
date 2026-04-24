@@ -62,9 +62,9 @@ const ONB = {
       `👥 *команда: кто за что*\n\n` +
       `*Лёша Травкин* @atassist — возвраты, платёжные системы, инвойсы, акты\n\n` +
       `*Лера* @Vahadaldeneg — ЭДО\n\n` +
-      `*Полина* @radikalno — договоры, юрлица\n\n` +
       `*Наташа Дзера* @NatashaDzera — опс\n\n` +
-      `*Юля Мацако* @jmatsako — CEO, стратегия, доступы`,
+      `*Юля Мацако* @jmatsako — CEO, стратегия, доступы\n\n` +
+      `*Полина* @radikalno — договоры, юрлица _(не писать)_`,
     kb: () => new InlineKeyboard().text("⬅️", "onb:part1"),
   },
 
@@ -100,12 +100,14 @@ const ONB = {
       `в репо лежат файлы, по которым можно сверить свой тон:\n\n` +
       `• *плейбук:* 10-support/Playbook/support\\_playbook.md\n` +
       `• *grand verbatim:* 10-support/data/grand-verbatim-base.md\n` +
-      `  (100+ реальных диалогов — наш source of truth)\n` +
+      `  (100+ реальных диалогов — наш source of truth, до января 2026)\n` +
+      `• *grand verbatim 2:* 10-support/data/grand\\_verbatim\\_2\\_27.03.md\n` +
+      `  (327 чатов с 01.03.2026 — свежие кейсы)\n` +
       `• *FAQ:* 10-support/FAQ/faq\\_inner/FAQ\\_V1.md\n\n` +
       `💡 *как проверить себя:*\n` +
       `открой Cursor, вставь свой ответ и напиши:\n` +
       `_«прочитай playbook и grand-verbatim в 10-support/ и скажи, попадаю ли я в наш тон. дай рекомендации»_\n\n` +
-      `📌 grand verbatim обновлён до января 2026 (лучше обновить — загрузи новые чаты в data/raw/ и запусти /update-support-kb)`,
+      `📌 последнее обновление — 27.03.2026. чтобы обновить: загрузи новые чаты в data/raw/ и запусти /update-support-kb`,
     kb: () => new InlineKeyboard().text("⬅️", "onb:part2"),
   },
 
@@ -130,10 +132,10 @@ const ONB = {
       `2. уточни у Юли или Наташи\n\n` +
       `3. по конкретным темам:\n` +
       `• возвраты → @atassist\n` +
-      `• документы → @radikalno\n` +
       `• ЭДО → @Vahadaldeneg\n` +
       `• стратегия → @jmatsako\n` +
-      `• опс → @NatashaDzera`,
+      `• опс → @NatashaDzera\n` +
+      `• документы → _см. чат gconf | документооборот_`,
     kb: () => new InlineKeyboard().text("⬅️", "onb:part3"),
   },
   "p3:access": {
@@ -166,6 +168,8 @@ const ONB = {
       `10-support/FAQ/tech\\_support\\_guides.md\n\n` +
       `3. *этот бот* — онбординг, задачи, справка\n` +
       `документация → /docs\n\n` +
+      `📎 *Master Intake* (реликт) — если надо проверить старые статусы по платежам:\n` +
+      `[открыть таблицу](https://docs.google.com/spreadsheets/d/1R4142Q-z8oYeH3BRKWidQ5piykI9Tra5Iwinm-AEnKY/edit?usp=sharing)\n\n` +
       `эти штуки помогают не терять знания и масштабироваться 💙`,
     kb: () => new InlineKeyboard().text("⬅️", "onb:part3"),
   },
