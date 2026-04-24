@@ -1,6 +1,9 @@
 // ─── Linear API ─────────────────────────────────────────────────────────────
+// Все user-input'ы проходят ТОЛЬКО через GraphQL-переменные. В query-строку
+// никогда не подставляем пользовательский текст — это защита от инъекций и
+// от случайных ломающихся символов (`, \, ", \n).
 
-async function linearGQL(query, variables) {
+export async function linearGQL(query, variables) {
   const res = await fetch("https://api.linear.app/graphql", {
     method: "POST",
     headers: {
@@ -26,35 +29,50 @@ export async function createLinearIssue({ title, description, priority, label, t
 
 export async function findIssueByKey(key) {
   // Сначала пробуем как UUID
-  let json = await linearGQL(`{ issue(id: "${key}") { id title url } }`);
+  let json = await linearGQL(
+    `query FindIssue($id: String!) { issue(id: $id) { id title url } }`,
+    { id: key }
+  );
   if (json.data?.issue) return json.data.issue;
   // Потом ищем по ключу (GCO-21)
-  json = await linearGQL(`{ issueSearch(query: "${key}", first: 1) { nodes { id title url } } }`);
+  json = await linearGQL(
+    `query SearchIssue($q: String!) { issueSearch(query: $q, first: 1) { nodes { id title url } } }`,
+    { q: key }
+  );
   return json.data?.issueSearch?.nodes?.[0] ?? null;
 }
 
 export async function getActiveIssues(teamId) {
   const filter = teamId
-    ? `{ state: { type: { nin: ["completed", "cancelled"] } }, team: { id: { eq: "${teamId}" } } }`
-    : `{ state: { type: { nin: ["completed", "cancelled"] } } }`;
-  const json = await linearGQL(`{
-    issues(filter: ${filter}, orderBy: updatedAt, first: 30) {
-      nodes { id title url priority state { name } team { name } }
-    }
-  }`);
+    ? { state: { type: { nin: ["completed", "cancelled"] } }, team: { id: { eq: teamId } } }
+    : { state: { type: { nin: ["completed", "cancelled"] } } };
+  const json = await linearGQL(
+    `query ActiveIssues($filter: IssueFilter!) {
+      issues(filter: $filter, orderBy: updatedAt, first: 30) {
+        nodes { id title url priority state { name } team { name } }
+      }
+    }`,
+    { filter }
+  );
   return json.data?.issues?.nodes ?? [];
 }
 
 export async function createLinearComment(issueId, body) {
   const json = await linearGQL(
-    `mutation { commentCreate(input: { issueId: "${issueId}", body: "${body.replace(/"/g, '\\"').replace(/\n/g, '\\n')}" }) { success } }`
+    `mutation CreateComment($input: CommentCreateInput!) {
+      commentCreate(input: $input) { success }
+    }`,
+    { input: { issueId, body } }
   );
   return json.data?.commentCreate?.success ?? false;
 }
 
 export async function completeLinearIssue(id) {
   // Сначала узнаём команду задачи, потом ставим Done для этой команды
-  const issueJson = await linearGQL(`{ issue(id: "${id}") { team { id } } }`);
+  const issueJson = await linearGQL(
+    `query IssueTeam($id: String!) { issue(id: $id) { team { id } } }`,
+    { id }
+  );
   const teamId = issueJson.data?.issue?.team?.id;
   const doneStates = {
     "f36e0f1a-e439-44e8-8f43-22f92e37cde7": "fb379f65-11fc-4cf7-b289-2244b33bf58c", // support
@@ -63,12 +81,18 @@ export async function completeLinearIssue(id) {
   const stateId = doneStates[teamId];
   if (!stateId) return false;
   const json = await linearGQL(
-    `mutation { issueUpdate(id: "${id}", input: { stateId: "${stateId}" }) { success } }`
+    `mutation CompleteIssue($id: String!, $stateId: String!) {
+      issueUpdate(id: $id, input: { stateId: $stateId }) { success }
+    }`,
+    { id, stateId }
   );
   return json.data?.issueUpdate?.success ?? false;
 }
 
 export async function deleteLinearIssue(id) {
-  const json = await linearGQL(`mutation { issueDelete(id: "${id}") { success } }`);
+  const json = await linearGQL(
+    `mutation DeleteIssue($id: String!) { issueDelete(id: $id) { success } }`,
+    { id }
+  );
   return json.data?.issueDelete?.success ?? false;
 }

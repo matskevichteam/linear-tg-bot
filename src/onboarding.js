@@ -191,23 +191,28 @@ export function registerOnboarding() {
 
   // Навигация по онбордингу
   bot.callbackQuery(/^onb:(.+)$/, async (ctx) => {
-    const key = ctx.match[1];
+    try {
+      const key = ctx.match[1];
 
-    if (key === "back") {
-      const { text, kb } = ONB.main;
-      await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: kb() });
-      return ctx.answerCallbackQuery();
+      if (key === "back") {
+        const { text, kb } = ONB.main;
+        await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: kb() });
+        return ctx.answerCallbackQuery();
+      }
+
+      if (key === "close") {
+        await ctx.editMessageText("📚 онбординг закрыт. /menu чтобы открыть снова.");
+        return ctx.answerCallbackQuery();
+      }
+
+      const section = ONB[key];
+      if (!section) return ctx.answerCallbackQuery({ text: "Раздел не найден", show_alert: true });
+
+      await ctx.editMessageText(section.text, { parse_mode: "Markdown", reply_markup: section.kb() });
+      await ctx.answerCallbackQuery();
+    } catch (e) {
+      console.error("❌ onboarding ошибка:", e);
+      await ctx.answerCallbackQuery({ text: "❌ Попробуй ещё раз", show_alert: true });
     }
-
-    if (key === "close") {
-      await ctx.editMessageText("📚 онбординг закрыт. /onboarding чтобы открыть снова.");
-      return ctx.answerCallbackQuery();
-    }
-
-    const section = ONB[key];
-    if (!section) return ctx.answerCallbackQuery({ text: "Раздел не найден", show_alert: true });
-
-    await ctx.editMessageText(section.text, { parse_mode: "Markdown", reply_markup: section.kb() });
-    await ctx.answerCallbackQuery();
   });
 }

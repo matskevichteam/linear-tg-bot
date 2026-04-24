@@ -35,39 +35,52 @@ export async function handleText(ctx, text) {
 export function registerTaskHandlers() {
   // Сменить приоритет кнопкой
   bot.callbackQuery(/^prio:(high|medium|low)$/, async (ctx) => {
-    const newPriority = ctx.match[1];
-    const pending = getPending(ctx.chat.id) || recoverPending(ctx);
-    if (!pending) return ctx.answerCallbackQuery({ text: "Задача не найдена", show_alert: true });
+    try {
+      const newPriority = ctx.match[1];
+      const pending = getPending(ctx.chat.id) || recoverPending(ctx);
+      if (!pending) return ctx.answerCallbackQuery({ text: "Задача не найдена", show_alert: true });
 
-    pending.task.priority = newPriority;
-    setPending(ctx.chat.id, pending);
+      pending.task.priority = newPriority;
+      setPending(ctx.chat.id, pending);
 
-    const pe = priorityEmoji[newPriority];
-    const pl = priorityLabel[newPriority];
-    await ctx.editMessageText(
-      `📝 *${pending.task.title}*\n${pe} ${pl} · #${pending.task.label}`,
-      { parse_mode: "Markdown", reply_markup: taskSelectKeyboard(newPriority) }
-    );
-    await ctx.answerCallbackQuery();
+      const pe = priorityEmoji[newPriority];
+      const pl = priorityLabel[newPriority];
+      await ctx.editMessageText(
+        `📝 *${pending.task.title}*\n${pe} ${pl} · #${pending.task.label}`,
+        { parse_mode: "Markdown", reply_markup: taskSelectKeyboard(newPriority) }
+      );
+      await ctx.answerCallbackQuery();
+    } catch (e) {
+      console.error("❌ prio: ошибка:", e);
+      await ctx.answerCallbackQuery({ text: "❌ Попробуй ещё раз", show_alert: true });
+    }
   });
 
   // Выбрал команду → создаём задачу
   bot.callbackQuery(/^send:(support|docops)$/, async (ctx) => {
-    const teamKey = ctx.match[1];
-    const team = TEAMS[teamKey];
-    const pending = getPending(ctx.chat.id) || recoverPending(ctx);
-    if (!pending) return ctx.answerCallbackQuery({ text: "Задача не найдена", show_alert: true });
+    try {
+      const teamKey = ctx.match[1];
+      const team = TEAMS[teamKey];
+      const pending = getPending(ctx.chat.id) || recoverPending(ctx);
+      if (!pending) return ctx.answerCallbackQuery({ text: "Задача не найдена", show_alert: true });
 
-    deletePending(ctx.chat.id);
+      deletePending(ctx.chat.id);
 
-    const issue = await createLinearIssue({ ...pending.task, teamId: team.id });
-    if (!issue) {
-      await ctx.editMessageText("❌ Не удалось создать задачу в Linear");
-      return ctx.answerCallbackQuery();
+      const issue = await createLinearIssue({ ...pending.task, teamId: team.id });
+      if (!issue) {
+        await ctx.editMessageText("❌ Не удалось создать задачу в Linear");
+        return ctx.answerCallbackQuery({ text: "❌ Linear API не ответил", show_alert: true });
+      }
+
+      setLastIssue(ctx.chat.id, issue);
+      await ctx.editMessageText(formatReply(pending.task, issue, team.name));
+      await ctx.answerCallbackQuery({ text: `✅ → ${team.name}` });
+    } catch (e) {
+      console.error("❌ send: ошибка:", e);
+      await ctx.answerCallbackQuery({ text: "❌ Ошибка, попробуй ещё раз", show_alert: true });
     }
-
-    setLastIssue(ctx.chat.id, issue);
-    await ctx.editMessageText(formatReply(pending.task, issue, team.name));
-    await ctx.answerCallbackQuery({ text: `✅ → ${team.name}` });
   });
+
+  // Смена приоритета тоже в try/catch — network может упасть на editMessageText
+  // (уже зарегистрирован выше — этот блок только для документации)
 }

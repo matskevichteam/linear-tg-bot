@@ -336,6 +336,98 @@ test("TEAMS.docops has id, name, emoji", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+console.log("\n🔐 Linear API: user data goes via variables, not query string");
+// ═══════════════════════════════════════════════════════════════════════════════
+// Мокаем global.fetch и проверяем, что опасные символы (\, ", \n) в
+// пользовательском тексте уходят в `variables`, а НЕ в query-строку.
+
+const originalFetch = globalThis.fetch;
+let lastRequestBody = null;
+
+function mockFetch(response) {
+  globalThis.fetch = async (_url, opts) => {
+    lastRequestBody = JSON.parse(opts.body);
+    return { json: async () => response };
+  };
+}
+
+function restoreFetch() {
+  globalThis.fetch = originalFetch;
+  lastRequestBody = null;
+}
+
+await asyncTest("createLinearComment: backslash/quotes/newlines идут в variables, не ломают query", async () => {
+  mockFetch({ data: { commentCreate: { success: true } } });
+  const nasty = 'text with " quotes, \\backslash and\nnewlines';
+  const result = await linear.createLinearComment("issue-id-123", nasty);
+  assert.strictEqual(result, true);
+  // Query не содержит user input
+  assert.ok(!lastRequestBody.query.includes(nasty), "user body leaked into query string");
+  // body лежит в variables
+  assert.strictEqual(lastRequestBody.variables.input.body, nasty);
+  assert.strictEqual(lastRequestBody.variables.input.issueId, "issue-id-123");
+  restoreFetch();
+});
+
+await asyncTest("findIssueByKey: ключ идёт в variables, не в query", async () => {
+  mockFetch({ data: { issue: { id: "abc", title: "T", url: "u" } } });
+  const evil = 'GCO-21" } foo { __typename } bar:issue(id:"';
+  await linear.findIssueByKey(evil);
+  assert.ok(!lastRequestBody.query.includes(evil), "key leaked into query string");
+  assert.strictEqual(lastRequestBody.variables.id, evil);
+  restoreFetch();
+});
+
+await asyncTest("getActiveIssues: teamId идёт в variables через filter объект", async () => {
+  mockFetch({ data: { issues: { nodes: [] } } });
+  await linear.getActiveIssues("some-team-id");
+  assert.deepStrictEqual(lastRequestBody.variables.filter.team.id.eq, "some-team-id");
+  // null teamId → filter без team
+  await linear.getActiveIssues(null);
+  assert.strictEqual(lastRequestBody.variables.filter.team, undefined);
+  restoreFetch();
+});
+
+await asyncTest("createLinearIssue: title/description идут в variables", async () => {
+  mockFetch({ data: { issueCreate: { success: true, issue: { id: "x", title: "T", url: "u" } } } });
+  await linear.createLinearIssue({
+    title: 'Task with "quotes"',
+    description: "multi\nline\\desc",
+    priority: "high",
+    label: "саппорт",
+    teamId: "team-1",
+  });
+  assert.strictEqual(lastRequestBody.variables.input.title, 'Task with "quotes"');
+  assert.strictEqual(lastRequestBody.variables.input.description, "multi\nline\\desc");
+  assert.strictEqual(lastRequestBody.variables.input.priority, 2);
+  assert.strictEqual(lastRequestBody.variables.input.teamId, "team-1");
+  assert.ok(!lastRequestBody.query.includes('Task with'), "title leaked into query");
+  restoreFetch();
+});
+
+await asyncTest("completeLinearIssue / deleteLinearIssue: id через variables", async () => {
+  mockFetch({ data: { issue: { team: { id: "f36e0f1a-e439-44e8-8f43-22f92e37cde7" } } } });
+  // completeLinearIssue сначала fetches team, потом updates — мок возвращает то же для обоих
+  globalThis.fetch = async (_url, opts) => {
+    lastRequestBody = JSON.parse(opts.body);
+    if (lastRequestBody.query.includes("IssueTeam")) {
+      return { json: async () => ({ data: { issue: { team: { id: "f36e0f1a-e439-44e8-8f43-22f92e37cde7" } } } }) };
+    }
+    return { json: async () => ({ data: { issueUpdate: { success: true } } }) };
+  };
+  const ok = await linear.completeLinearIssue("issue-xyz");
+  assert.strictEqual(ok, true);
+  assert.strictEqual(lastRequestBody.variables.id, "issue-xyz");
+  assert.ok(lastRequestBody.variables.stateId, "stateId must be set");
+
+  mockFetch({ data: { issueDelete: { success: true } } });
+  const okDel = await linear.deleteLinearIssue("issue-abc");
+  assert.strictEqual(okDel, true);
+  assert.strictEqual(lastRequestBody.variables.id, "issue-abc");
+  restoreFetch();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Results
 // ═══════════════════════════════════════════════════════════════════════════════
 

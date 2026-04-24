@@ -9,9 +9,12 @@ import { ONB } from "../onboarding.js";
 import { handleText } from "./tasks.js";
 
 export function registerMessageHandlers() {
-  // ─── Debug ──────────────────────────────────────────────────────────────────
+  // ─── Debug (краткий лог, не весь JSON) ─────────────────────────────────────
   bot.on("message", async (ctx, next) => {
-    console.log("📩", JSON.stringify(ctx.message, null, 2));
+    const m = ctx.message;
+    const kind = m.voice ? "voice" : m.forward_origin ? "forward" : m.text ? "text" : "other";
+    const preview = m.text ? `: ${m.text.slice(0, 80)}${m.text.length > 80 ? "…" : ""}` : "";
+    console.log(`📩 [${m.chat.id}] ${kind}${preview}`);
     await next();
   });
 
